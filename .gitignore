@@ -11,11 +11,15 @@ build-fprime-*
 /venv/
 /.temp/
 /fprime-venv/
-/__pycache__/
 /.idea/
 /.vscode/
 .DS_Store
+__pycache__/
+*.pyc
+*.pyo
+*.bin
 *.gcov
+
 # YAMCS runtime data
 yamcs-data/
 cache/
