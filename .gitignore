@@ -16,3 +16,6 @@ build-fprime-*
 /.vscode/
 .DS_Store
 *.gcov
+# YAMCS runtime data
+yamcs-data/
+cache/
