@@ -20,8 +20,7 @@ jobs:
       github.event.issue.pull_request != null &&
       contains(github.event.comment.body, '/run-hil') &&
       contains(fromJSON('["OWNER", "MEMBER", "COLLABORATOR"]'), github.event.comment.author_association)
-    # TODO: update once the Pi runner is registered with these labels.
-    runs-on: [self-hosted, hil, rpi]
+    runs-on: [self-hosted, baremetal]
 
     steps:
       - name: Resolve PR head commit
