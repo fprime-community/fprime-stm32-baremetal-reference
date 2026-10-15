@@ -82,8 +82,9 @@ void Led ::parameterUpdated(FwPrmIdType id) {
         case PARAMID_BLINK_INTERVAL: {
             // Read back the parameter value
             const U32 interval = this->paramGet_BLINK_INTERVAL(isValid);
-            // NOTE: isValid is always VALID in parameterUpdated as it was just properly set
-            FW_ASSERT(isValid == Fw::ParamValid::VALID, static_cast<FwAssertArgType>(isValid));
+            // isValid is VALID when loaded from PrmDb, or DEFAULT when PrmDb has no
+            // saved value yet (e.g. first boot) - both are legitimate, usable states.
+            FW_ASSERT(isValid != Fw::ParamValid::INVALID, static_cast<FwAssertArgType>(isValid));
 
             // Emit the blink interval set event
             this->log_ACTIVITY_HI_BlinkingIntervalSet(interval);
