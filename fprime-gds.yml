@@ -1,0 +1,15 @@
+# This is a configuration file for the F´ GDS application (also read by fprime-yamcs,
+# which accepts the same CLI options). See lib/fprime-yamcs/README.md.
+
+# Entries with no associated values are passed as `--flags`; entries with associated
+# values are passed as `--key <value>` pairs.
+
+command-line-options:
+  # Cross-compiled dictionary: avoids picking the native build's dictionary by mistake
+  dictionary: build-artifacts/stm32h7/ReferenceDeployment/dict/ReferenceDeploymentTopologyDictionary.json
+  # The board is already flashed and running; don't launch a binary
+  no-app:
+  # Matches the live ground link used by the HIL workflow (.github/workflows/hil.yml)
+  communication-selection: uart
+  uart-device: /dev/ttyACM0
+  uart-baud: 115200

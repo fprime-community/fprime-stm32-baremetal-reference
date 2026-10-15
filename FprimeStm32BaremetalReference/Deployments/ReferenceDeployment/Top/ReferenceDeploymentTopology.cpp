@@ -83,6 +83,12 @@ void configureTopology() {
         Fw::Logger::log("[ERROR] Failed to open GPIO\n");
     }
 
+    // BMP280 initialization
+    const Fw::Success bmpDriverOpened = Bmp280::bmpDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::F, GPIO_PIN_6, 100);
+    if(bmpDriverOpened == Fw::Success::FAILURE) {
+        Fw::Logger::log("[ERROR] Failed to open BMP280 SPI driver\n");
+    }
+
     // IMU Manager initialization
     MpuImu::imuManager.configure(0x68);
 }
