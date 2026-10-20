@@ -181,3 +181,33 @@ Two independent layers of automated testing back this deployment:
   that doesn't exist in the fpp model on `stm32h7` and breaks the build. See
   `lib/fprime-stm32/README.md`'s "Adding a sensor" section for the exact
   pattern already used for `MpuImu`.
+
+## Ground data system: `fprime-gds` or `fprime-yamcs`
+
+With the board flashed and running, either ground tool talks to it over the
+same live UART link — both read their flags from the `fprime-gds.yml` file
+at the project root, so the only difference is which command you run.
+
+`fprime-gds` is F´'s development/test GDS: a single-session developer
+console for exercising commands, telemetry, and events while iterating on
+hardware and flight software.
+
+```shell
+source fprime-venv/bin/activate
+fprime-gds
+```
+
+`lib/fprime-yamcs` is a submodule of [YAMCS](https://yamcs.org/), a full
+mission control system with a persistent telemetry/event archive, alarms,
+and multi-user operations support — the ground system this project graduates
+to once it needs operations-grade ground support rather than a developer's
+test console. It's a drop-in replacement for `fprime-gds` on the
+command/telemetry path, including automatic dictionary-to-XTCE conversion
+and an F´-flavored severity-colored Events page. See
+[`lib/fprime-yamcs/README.md`](lib/fprime-yamcs/README.md) for the full
+option set.
+
+```shell
+source fprime-venv/bin/activate
+fprime-yamcs
+```
