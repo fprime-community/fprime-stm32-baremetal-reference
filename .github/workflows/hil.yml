@@ -81,6 +81,17 @@ jobs:
           fprime-util generate -f
           fprime-util build -j"$(nproc)"
 
+      - name: Reset GPIO fault-injection rig to baseline
+        run: |
+          pinctrl set 25 op dh  # SCL connected
+          pinctrl set 8  op dh  # SDA connected
+          pinctrl set 7  op dh  # MOSI connected
+          pinctrl set 12 op dh  # MISO connected
+          pinctrl set 16 op dh  # CS connected
+          pinctrl set 20 op dh  # SCK connected
+          pinctrl set 21 op dl  # sensor 3V3 rail on (active-low)
+          pinctrl set 24 op dl  # heater off
+
       - name: Flash board via OpenOCD/ST-Link
         run: |
           openocd -f interface/stlink.cfg -f target/stm32h7x.cfg \
