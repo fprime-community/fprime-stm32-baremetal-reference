@@ -3,7 +3,7 @@
  * \brief Project override for Svc::CommandDispatcher table sizing
  *
  * The framework default (150-entry dispatch table) is oversized for this
- * deployment's 48 declared command opcodes. Sized here with headroom for the
+ * deployment's declared command opcodes. Sized here with headroom for the
  * upcoming USART1 DMA ground-link driver's commands, to reclaim static AXI
  * SRAM `.bss` for the bare-metal STM32H753 image.
  */

@@ -48,6 +48,7 @@ namespace PingEntries {
     namespace ReferenceDeployment_rateGroup_1Hz {enum { WARN = 3, FATAL = 5 };}
     namespace ReferenceDeployment_rateGroup_0_5Hz {enum { WARN = 3, FATAL = 5 };}
     namespace ReferenceDeployment_rateGroup_0_25Hz {enum { WARN = 3, FATAL = 5 };}
+    namespace ReferenceDeployment_rateGroup_100Hz {enum { WARN = 3, FATAL = 5 };}
     namespace ReferenceDeployment_cmdSeq {enum { WARN = 3, FATAL = 5 };}
 }  // namespace PingEntries
 

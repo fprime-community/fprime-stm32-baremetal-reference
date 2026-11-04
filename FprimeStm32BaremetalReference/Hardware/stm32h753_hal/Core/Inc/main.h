@@ -225,10 +225,6 @@ void Error_Handler(void);
 #define A5_GPIO_Port GPIOF
 #define A4_Pin GPIO_PIN_4
 #define A4_GPIO_Port GPIOF
-#define LCD_G5_Pin GPIO_PIN_0
-#define LCD_G5_GPIO_Port GPIOK
-#define LCD_G6_Pin GPIO_PIN_1
-#define LCD_G6_GPIO_Port GPIOK
 #define LCD_G4_Pin GPIO_PIN_11
 #define LCD_G4_GPIO_Port GPIOJ
 #define ULPI_STP_Pin GPIO_PIN_0
