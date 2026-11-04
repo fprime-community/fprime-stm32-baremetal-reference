@@ -85,8 +85,11 @@ void configureTopology() {
         Fw::Logger::log("[ERROR] Failed to open GPIO\n");
     }
 
-    // BMP280 initialization
-    const Fw::Success bmpDriverOpened = Bmp280::bmpDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::F, GPIO_PIN_6, 100);
+    // BMP280 initialization. POLLED for now: validates the updated
+    // Stm32SpiDriver (async/poll() support added alongside Stm32I2cDriver)
+    // against real hardware before any sensor opts into DMA mode.
+    const Fw::Success bmpDriverOpened = Bmp280::bmpDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::F, GPIO_PIN_6,
+                                                                100, Stm32::TransferMode::POLLED);
     if(bmpDriverOpened == Fw::Success::FAILURE) {
         Fw::Logger::log("[ERROR] Failed to open BMP280 SPI driver\n");
     }
