@@ -42,5 +42,11 @@ int main() {
         // Poll the TIM2 CH2 hardware tick source and the UART driver.
         ReferenceDeployment::timer.poll();
         ReferenceDeployment::comDriver.poll();
+
+        // Drain any in-flight DMA-mode SPI/I2C transfer. A harmless no-op
+        // while every instance stays POLLED (as it is today), but required
+        // once any instance opts into TransferMode::DMA.
+        Bmp280::bmpDriver.poll();
+        MpuImu::imuDriver.poll();
     }
 }
