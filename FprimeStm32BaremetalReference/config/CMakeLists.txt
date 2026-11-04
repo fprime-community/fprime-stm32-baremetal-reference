@@ -24,6 +24,7 @@ register_fprime_config(
         "${CMAKE_CURRENT_LIST_DIR}/fprime-sensors/XBeeSubtopologyConfig.fpp"
         "${CMAKE_CURRENT_LIST_DIR}/fprime-sensors/Bmp280SubtopologyConfig.fpp"
         "${CMAKE_CURRENT_LIST_DIR}/fprime-sensors/Rfm69SubtopologyConfig.fpp"
+        "${CMAKE_CURRENT_LIST_DIR}/fprime-sensors/Rfm9XSubtopologyConfig.fpp"
         "${CMAKE_CURRENT_LIST_DIR}/fprime-stm32/Stm32Config.hpp"
     INTERFACE
 )

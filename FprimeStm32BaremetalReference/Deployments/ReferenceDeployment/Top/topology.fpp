@@ -8,6 +8,7 @@ module ReferenceDeployment {
     rateGroup_1Hz
     rateGroup_0_5Hz
     rateGroup_0_25Hz
+    rateGroup_100Hz
   }
 
   deployment topology ReferenceDeployment {
@@ -21,7 +22,8 @@ module ReferenceDeployment {
     import FileHandling.Subtopology
     import MpuImu.Subtopology
     import Bmp280.Subtopology
-    
+    import Rfm9X.Subtopology
+
   # ----------------------------------------------------------------------
   # Instances used in the topology
   # ----------------------------------------------------------------------
@@ -29,6 +31,7 @@ module ReferenceDeployment {
     instance rateGroup_1Hz
     instance rateGroup_0_5Hz
     instance rateGroup_0_25Hz
+    instance rateGroup_100Hz
     instance rateGroupDriver
     instance systemResources
     instance timer
@@ -126,6 +129,15 @@ module ReferenceDeployment {
       rateGroup_0_25Hz.RateGroupMemberOut[2] -> DataProducts.dpBufferManager.schedIn
       rateGroup_0_25Hz.RateGroupMemberOut[3] -> DataProducts.dpWriter.schedIn
       rateGroup_0_25Hz.RateGroupMemberOut[4] -> DataProducts.dpMgr.schedIn
+
+      # 100Hz rate group (radio polling)
+      rateGroupDriver.CycleOut[Ports_RateGroups.rateGroup_100Hz] -> rateGroup_100Hz.CycleIn
+      rateGroup_100Hz.RateGroupMemberOut[0] -> Rfm9X.rfm9XManager.run
+    }
+
+    connections Rfm9XBuffers {
+      Rfm9X.rfm9XManager.allocate -> ComCcsds.commsBufferManager.bufferGetCallee
+      Rfm9X.rfm9XManager.deallocate -> ComCcsds.commsBufferManager.bufferSendIn
     }
 
     connections CdhCore_cmdSeq {

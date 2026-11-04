@@ -18,13 +18,14 @@
 // This is also the namespace where the topology components are instantiated by FPP.
 namespace ReferenceDeployment {
 
-Svc::RateGroupDriver::DividerSet rateGroupDivisorsSet{{{100, 0}, {200, 0}, {400, 0}}};
-// Divisors against a 10 ms base clock: 1Hz, 0.5Hz, 0.25Hz
+Svc::RateGroupDriver::DividerSet rateGroupDivisorsSet{{{100, 0}, {200, 0}, {400, 0}, {1, 0}}};
+// Divisors against a 10 ms base clock: 1Hz, 0.5Hz, 0.25Hz, 100Hz
 
 // Context tokens for rate group members (unused, set to zero)
 Svc::ActiveRateGroup::ContextArray rateGroup_1HzContext(0);
 Svc::ActiveRateGroup::ContextArray rateGroup_0_5HzContext(0);
 Svc::ActiveRateGroup::ContextArray rateGroup_0_25HzContext(0);
+Svc::ActiveRateGroup::ContextArray rateGroup_100HzContext(0);
 
 enum TopologyConstants {
     // USART1 configuration
@@ -62,6 +63,7 @@ void configureTopology() {
     rateGroup_1Hz.configure(rateGroup_1HzContext);
     rateGroup_0_5Hz.configure(rateGroup_0_5HzContext);
     rateGroup_0_25Hz.configure(rateGroup_0_25HzContext);
+    rateGroup_100Hz.configure(rateGroup_100HzContext);
 
     // Command sequencer needs to allocate memory to hold contents of command sequences
     cmdSeq.allocateBuffer(0, Stm32::getBootstrapAllocator(), 5 * 1024);
@@ -91,6 +93,21 @@ void configureTopology() {
 
     // IMU Manager initialization
     MpuImu::imuManager.configure(0x68);
+
+    // RFM9X LoRa radio initialization. Shares SPI5 (PF7 SCK, PF8 MISO, PF9 MOSI)
+    // with Bmp280.bmpDriver via a distinct software CS pin. PK0 (CS) and PK1
+    // (RST) are electrically idle LCD_G5/G6 pins on this board (the onboard LCD
+    // panel is never initialized by this firmware); PK0-PK2 must be manually
+    // reconfigured from AF14/LTDC to GPIO in gpio.c before this runs.
+    const Fw::Success rfm9XSpiOpened =
+        Rfm9X::spiDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::K, GPIO_PIN_0, 100);
+    if (rfm9XSpiOpened == Fw::Success::FAILURE) {
+        Fw::Logger::log("[ERROR] Failed to open RFM9X SPI driver\n");
+    }
+    const Fw::Success rfm9XResetOpened = Rfm9X::resetGpio.open(Stm32::GpioPort::K, GPIO_PIN_1, Fw::Direction::OUT);
+    if (rfm9XResetOpened == Fw::Success::FAILURE) {
+        Fw::Logger::log("[ERROR] Failed to open RFM9X reset GPIO\n");
+    }
 }
 
 void setupTopology(const TopologyState& state) {

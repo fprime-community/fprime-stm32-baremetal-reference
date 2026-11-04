@@ -44,6 +44,14 @@ module ReferenceDeployment {
     stack size Default.STACK_SIZE \
     priority 41
 
+  # 100Hz rate group (divisor 1 of the 100Hz/10ms base clock): drives radio
+  # polling-rate components (e.g. Rfm9X.rfm9XManager) whose internal timing
+  # constants assume a sub-10ms tick.
+  instance rateGroup_100Hz: Svc.ActiveRateGroup base id 0x10006000 \
+    queue size Default.QUEUE_SIZE \
+    stack size Default.STACK_SIZE \
+    priority 44
+
   instance cmdSeq: Svc.CmdSequencer base id 0x10004000 \
     queue size Default.QUEUE_SIZE \
     stack size Default.STACK_SIZE \
