@@ -102,8 +102,15 @@ void configureTopology() {
     // (RST) are electrically idle LCD_G5/G6 pins on this board (the onboard LCD
     // panel is never initialized by this firmware); PK0-PK2 must be manually
     // reconfigured from AF14/LTDC to GPIO in gpio.c before this runs.
+    // DMA mode: Rfm9XManager now speaks Stm32SpiDriver's async contract
+    // natively (spiWriteReadAsync/spiWriteReadAsyncComplete), so this
+    // instance must be opened in TransferMode::DMA -- POLLED only serves
+    // the blocking Drv.Spi port, which this instance no longer uses.
+    // Requires the CubeMX-side DMA linkage for SPI5 documented separately
+    // (hdma_spi5_tx/rx on free DMA1 streams, NVIC enables) before this can
+    // run on real hardware; open() asserts if that linkage is missing.
     const Fw::Success rfm9XSpiOpened =
-        Rfm9X::spiDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::K, GPIO_PIN_0, 100);
+        Rfm9X::spiDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::K, GPIO_PIN_0, 100, Stm32::TransferMode::DMA);
     if (rfm9XSpiOpened == Fw::Success::FAILURE) {
         Fw::Logger::log("[ERROR] Failed to open RFM9X SPI driver\n");
     }

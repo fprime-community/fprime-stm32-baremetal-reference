@@ -44,9 +44,12 @@ int main() {
         ReferenceDeployment::comDriver.poll();
 
         // Drain any in-flight DMA-mode SPI/I2C transfer. A harmless no-op
-        // while every instance stays POLLED (as it is today), but required
-        // once any instance opts into TransferMode::DMA.
+        // for a POLLED-mode instance (Bmp280::bmpDriver, MpuImu::imuDriver);
+        // required for Rfm9X::spiDriver, which is opened in
+        // TransferMode::DMA so Rfm9XManager can speak Stm32SpiDriver's
+        // async contract natively.
         Bmp280::bmpDriver.poll();
         MpuImu::imuDriver.poll();
+        Rfm9X::spiDriver.poll();
     }
 }
