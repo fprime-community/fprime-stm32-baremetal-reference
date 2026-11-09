@@ -114,7 +114,7 @@ void configureTopology() {
     if (rfm9XSpiOpened == Fw::Success::FAILURE) {
         Fw::Logger::log("[ERROR] Failed to open RFM9X SPI driver\n");
     }
-    const Fw::Success rfm9XResetOpened = Rfm9X::resetGpio.open(Stm32::GpioPort::K, GPIO_PIN_1, Fw::Direction::OUT);
+    const Fw::Success rfm9XResetOpened = Rfm9X::resetGpio.open(Stm32::GpioPort::K, GPIO_PIN_2, Fw::Direction::OUT);
     if (rfm9XResetOpened == Fw::Success::FAILURE) {
         Fw::Logger::log("[ERROR] Failed to open RFM9X reset GPIO\n");
     }
