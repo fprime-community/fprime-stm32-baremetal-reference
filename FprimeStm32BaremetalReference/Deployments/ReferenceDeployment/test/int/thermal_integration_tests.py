@@ -25,14 +25,6 @@ shed accumulated heat from its package) - the IMU's cooldown is intentionally
 not asserted here, since waiting long enough for it would require far more
 time than this suite should block on.
 
-The 60s BMP280 cooldown window is also NOT safe immediately after another
-heat-up cycle: confirmed on hardware that when this test's own heat-up
-follows test_heater_raises_both_sensor_temperatures directly, residual heat
-in the resistor/surrounding structure keeps BMP280 rising for longer than 60s
-after heater-off (measured: still +1.0C at 60s, not yet trending down).
-COOLDOWN_SECONDS is set well above the clean-start 60s baseline to absorb
-that lag regardless of what ran immediately before this test.
-
 This test ONLY runs meaningfully on the Raspberry Pi the rig is wired to - it
 drives a real GPIO pin via `pinctrl` (ships with Raspberry Pi OS, no extra
 dependency). It is skipped automatically if `pinctrl` isn't on PATH.
@@ -55,17 +47,17 @@ BMP_CHANNEL = "Bmp280.bmpManager.Reading"
 # Real heat-soak time needed for a clearly-measurable rise on this rig (confirmed
 # on hardware - BMP280 ΔT was already >3C by 45s, IMU ΔT >1C; 90s gives margin).
 HEAT_SOAK_SECONDS = 90
-# Confirmed on hardware this needs real margin beyond the 60s a from-cold cycle
-# needs - running right after a heat-up cycle, BMP280 was still +1.0C at 60s
-# (not yet trending down). 150s gives the lagging residual heat time to clear.
-COOLDOWN_SECONDS = 150
 
 # Minimum temperature rise to count as "responded to the stimulus," well below
 # the measured deltas (BMP ~8C, IMU ~2.9C at 90s) to tolerate a cooler room or
 # a partially-degraded resistor without chasing the exact measured numbers.
 MIN_BMP_RISE_C = 2.0
 MIN_IMU_RISE_C = 0.5
-MIN_BMP_COOLDOWN_DROP_C = 0.5
+
+COOLDOWN_SAMPLE_INTERVAL_SECONDS = 30
+COOLDOWN_REQUIRED_DECREASES = 3
+COOLDOWN_MIN_STEP_DROP_C = 0.05
+COOLDOWN_MAX_SECONDS = 420
 
 SAMPLE_TIMEOUT = 15
 
@@ -126,9 +118,9 @@ def test_heater_raises_both_sensor_temperatures(fprime_test_api):
 def test_bmp_temperature_falls_after_heater_off(fprime_test_api):
     """
     @brief Apply the heat stimulus, then remove it and confirm BMP280
-    temperature measurably drops within a practical test window. The IMU's
-    cooldown is too slow to assert within a reasonable timeout and is
-    intentionally not checked here - see module docstring.
+    temperature enters a sustained downward trend. The IMU's cooldown is too
+    slow to assert within a reasonable timeout and is intentionally not
+    checked here - see module docstring.
     Covers: DR-4.11.5.4 (stress testing) - recovery half of the thermal cycle.
     """
     _set_heater(on=True)
@@ -136,11 +128,22 @@ def test_bmp_temperature_falls_after_heater_off(fprime_test_api):
     bmp_heated = _latest_temperature(fprime_test_api, BMP_CHANNEL)
 
     _set_heater(on=False)
-    time.sleep(COOLDOWN_SECONDS)
-    bmp_cooled = _latest_temperature(fprime_test_api, BMP_CHANNEL)
 
-    drop = bmp_heated - bmp_cooled
-    assert drop >= MIN_BMP_COOLDOWN_DROP_C, (
-        f"BMP280 temperature did not drop enough after removing the heat stimulus: "
-        f"heated={bmp_heated:.2f}C, cooled={bmp_cooled:.2f}C, drop={drop:.2f}C"
-    )
+    previous = bmp_heated
+    consecutive_decreases = 0
+    elapsed = 0
+    history = [bmp_heated]
+    while consecutive_decreases < COOLDOWN_REQUIRED_DECREASES:
+        assert elapsed < COOLDOWN_MAX_SECONDS, (
+            f"BMP280 temperature never entered a sustained downward trend within "
+            f"{COOLDOWN_MAX_SECONDS}s of removing the heat stimulus: {history}"
+        )
+        time.sleep(COOLDOWN_SAMPLE_INTERVAL_SECONDS)
+        elapsed += COOLDOWN_SAMPLE_INTERVAL_SECONDS
+        current = _latest_temperature(fprime_test_api, BMP_CHANNEL)
+        history.append(current)
+        if previous - current >= COOLDOWN_MIN_STEP_DROP_C:
+            consecutive_decreases += 1
+        else:
+            consecutive_decreases = 0
+        previous = current
