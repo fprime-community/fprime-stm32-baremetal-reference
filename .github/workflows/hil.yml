@@ -131,7 +131,13 @@ jobs:
     environment: ${{ github.event_name == 'workflow_dispatch' && 'hil-hardware' || '' }}
     # Fork PRs of THIS repo never reach the board: same-repo-head check, same shape as
     # the trust gate this job always had, now evaluated against this repo's own PRs.
-    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+    # On workflow_dispatch (the nasa/fprime ext-ci orchestrator path), additionally require
+    # fprime_repository == nasa/fprime - the orchestrator's manifest entry for this repo sets
+    # on_pr: false so it never dispatches a PR/fork head, but this guard is a second,
+    # independent layer against a future manual dispatch naming a different F´ fork.
+    if: >
+      (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository) &&
+      (github.event_name != 'workflow_dispatch' || inputs.fprime_repository == 'nasa/fprime')
     env:
       # Single source of truth for the rig baseline, run both before and after
       # the test steps - a changed pin wiring only needs updating here.
