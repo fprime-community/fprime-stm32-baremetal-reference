@@ -197,6 +197,10 @@ jobs:
         if: always()
         run: eval "$RIG_BASELINE_CMD"
         shell: bash
+      - name: "Sanitize log filenames for upload-artifact"
+        if: always()
+        run: find ci-logs -depth -name '*:*' -exec bash -c 'mv "$1" "${1//:/-}"' _ {} \;
+        shell: bash
       - name: "Archive logs"
         uses: actions/upload-artifact@v4
         if: always()
