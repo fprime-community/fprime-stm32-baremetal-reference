@@ -118,6 +118,8 @@ void configureTopology() {
     if (rfm9XResetOpened == Fw::Success::FAILURE) {
         Fw::Logger::log("[ERROR] Failed to open RFM9X reset GPIO\n");
     }
+
+    Rfm9X::rfm9XManager.configure(10);
 }
 
 void setupTopology(const TopologyState& state) {
