@@ -9,7 +9,11 @@ module Rfm9X {
     @ multi-device-per-bus pattern (lib/fprime-stm32/README.md).
     instance spiDriver: Stm32.Stm32SpiDriver base id Rfm9X.SubtopologyConfig.BASE_ID + 0x00002000
 
-    @ RFM9X active-high hardware reset line.
+    @ RFM9X reset/power-enable GPIO. This project wires it to a dedicated
+    @ NRESET line (active-low per the SX127x datasheet); Rfm9XManager drives
+    @ it LOW-then-HIGH regardless, so this same instance/wiring pattern would
+    @ work identically if wired to a power-enable GPIO instead (see
+    @ Rfm9XManager.fpp's resetGpio port doc comment).
     instance resetGpio: Stm32.Stm32GpioDriver base id Rfm9X.SubtopologyConfig.BASE_ID + 0x00005000
 
     @ Referenced only by the library's SimSubtopology (unused by this deployment,
