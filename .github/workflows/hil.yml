@@ -34,6 +34,10 @@ on:
         description: "Correlation id set by the dispatcher (informational)"
         type: string
         default: ""
+      integration_tests:
+        description: "Space-separated test paths under int/; use int/ to run all integration tests"
+        type: string
+        default: "int/smoke_integration_tests.py int/imu_manager_integration_tests.py int/bmp_manager_integration_tests.py"
 
 # Cancel in-progress runs if a newer run is started on a given PR; dispatched/nightly/push
 # runs are never auto-cancelled by a newer one (each is its own distinct revision under test).
@@ -187,23 +191,34 @@ jobs:
             -c "program ./build-artifacts/stm32h7/${DEPLOYMENT}/bin/${DEPLOYMENT} verify reset exit"
         shell: bash
       - name: "Run Integration Tests"
+        env:
+          INTEGRATION_TESTS: ${{ inputs.integration_tests }}
         run: |
           . venv/bin/activate
+          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
+            read -r -a test_targets <<< "${INTEGRATION_TESTS//$'\n'/ }"
+            if [ "${#test_targets[@]}" -eq 0 ]; then
+              echo "::error::integration_tests must specify at least one path under int/"
+              exit 1
+            fi
+            for target in "${test_targets[@]}"; do
+              if [[ "$target" != int/* || ! -e "$target" ]]; then
+                echo "::error::Integration test target does not exist under int/: $target"
+                exit 1
+              fi
+            done
+          else
+            test_targets=(int/)
+          fi
           mkdir -p ci-logs
           fprime-gds --no-app --communication-selection uart \
             --uart-device /dev/ttyACM0 --uart-baud 115200 \
             -d ./build-artifacts/stm32h7/${DEPLOYMENT} --logs ./ci-logs &
           sleep 10
-          # Dispatched runs (from nasa/fprime) only need to confirm core F´
-          if [ "${GITHUB_EVENT_NAME}" = "workflow_dispatch" ]; then
-            TEST_TARGETS="int/smoke_integration_tests.py int/imu_manager_integration_tests.py int/bmp_manager_integration_tests.py"
-          else
-            TEST_TARGETS="int/"
-          fi
           pytest -o python_files="*_integration_tests.py" \
             --dictionary ./build-artifacts/stm32h7/${DEPLOYMENT}/dict/${DEPLOYMENT}TopologyDictionary.json \
             --logs ./ci-logs --junit-xml-file hil-results.xml --gen-junitxml \
-            ${TEST_TARGETS}
+            "${test_targets[@]}"
         shell: bash
       - name: "Return GPIO fault-injection rig to baseline"
         if: always()
