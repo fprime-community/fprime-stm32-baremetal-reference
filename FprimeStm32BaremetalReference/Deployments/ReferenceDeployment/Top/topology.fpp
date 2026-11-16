@@ -39,6 +39,7 @@ module ReferenceDeployment {
     instance cmdSeq
     instance led
     instance gpioDriver
+    instance radioTest
 
   # ----------------------------------------------------------------------
   # Pattern graph specifiers
@@ -48,7 +49,15 @@ module ReferenceDeployment {
     event connections instance CdhCore.events
     telemetry connections instance CdhCore.tlmSend
     health connections instance CdhCore.$health
-    param connections instance FileHandling.prmDb
+    param connections instance FileHandling.prmDb {
+      Bmp280.bmpManager
+      ComCcsds.framer
+      ComCcsds.spacePacketDeframer
+      ComCcsds.spacePacketFramer
+      ComCcsds.tcDeframer
+      MpuImu.imuManager
+      led
+    }
     time connections instance osTime
 
   # ----------------------------------------------------------------------
@@ -138,6 +147,11 @@ module ReferenceDeployment {
     connections Rfm9XBuffers {
       Rfm9X.rfm9XManager.allocate -> ComCcsds.commsBufferManager.bufferGetCallee
       Rfm9X.rfm9XManager.deallocate -> ComCcsds.commsBufferManager.bufferSendIn
+      Rfm9X.rfm9XManager.dataOut -> radioTest.receive
+      radioTest.returnBuffer -> Rfm9X.rfm9XManager.dataReturnIn
+      Rfm9X.rfm9XManager.prmGet -> radioTest.getParameter
+      Rfm9X.rfm9XManager.prmSet -> FileHandling.prmDb.setPrm
+      radioTest.getStoredParameter -> FileHandling.prmDb.getPrm
     }
 
     connections CdhCore_cmdSeq {

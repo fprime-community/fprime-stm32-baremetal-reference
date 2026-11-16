@@ -98,17 +98,15 @@ void configureTopology() {
     MpuImu::imuManager.configure(0x68);
 
     // RFM9X LoRa radio initialization. Shares SPI5 (PF7 SCK, PF8 MISO, PF9 MOSI)
-    // with Bmp280.bmpDriver via a distinct software CS pin. PK0 (CS) and PK1
-    // (RST) are electrically idle LCD_G5/G6 pins on this board (the onboard LCD
-    // panel is never initialized by this firmware); PK0-PK2 must be manually
-    // reconfigured from AF14/LTDC to GPIO in gpio.c before this runs.
+    // with Bmp280.bmpDriver via a distinct software CS pin. PK0 is CS and
+    // PK2 is NRESET; these are LCD pins, so the LCD cannot be used with this
+    // wiring. The GPIO drivers configure them as outputs.
     // DMA mode: Rfm9XManager now speaks Stm32SpiDriver's async contract
     // natively (spiWriteReadAsync/spiWriteReadAsyncComplete), so this
     // instance must be opened in TransferMode::DMA -- POLLED only serves
     // the blocking Drv.Spi port, which this instance no longer uses.
-    // Requires the CubeMX-side DMA linkage for SPI5 documented separately
-    // (hdma_spi5_tx/rx on free DMA1 streams, NVIC enables) before this can
-    // run on real hardware; open() asserts if that linkage is missing.
+    // CubeMX links SPI5 RX/TX to DMA1 streams 2/3; open() asserts if the
+    // DMA linkage is missing.
     const Fw::Success rfm9XSpiOpened =
         Rfm9X::spiDriver.open(Stm32::SpiInstance::Spi5, Stm32::GpioPort::K, GPIO_PIN_0, 100, Stm32::TransferMode::DMA);
     if (rfm9XSpiOpened == Fw::Success::FAILURE) {
@@ -119,6 +117,8 @@ void configureTopology() {
         Fw::Logger::log("[ERROR] Failed to open RFM9X reset GPIO\n");
     }
 
+    // FREQUENCY_HZ is parameter id 3 in the pinned Rfm9XManager.
+    radioTest.configure(Rfm9X::rfm9XManager.getIdBase() + 3);
     Rfm9X::rfm9XManager.configure(10);
 }
 

@@ -85,4 +85,6 @@ module ReferenceDeployment {
 
   instance spiDriver: Stm32.Stm32SpiDriver base id 0x10017000
 
+  instance radioTest: ReferenceDeployment.RadioTest base id 0x10018000
+
 }

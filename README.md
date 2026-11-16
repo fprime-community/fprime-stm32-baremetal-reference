@@ -75,6 +75,47 @@ configuration. The current MicroFs implementation recognizes `/bin<N>/file<M>`
 paths; persistent parameter and file support for the framework's standard paths
 remains future work.
 
+### RFM9x radio echo test
+
+With both boards powered off, connect a 915 MHz RFM9x breakout to the STM32
+SPI5 signals PF7 (SCK), PF8 (MISO), PF9 (MOSI), PK0 (CS), and PK2 (RST),
+plus a suitable 3.3 V supply and common ground. PK0 and PK2 are LCD pins;
+do not use the LCD with this wiring. SPI5 is shared with the BMP280 on PF6
+chip select. Install a 915 MHz antenna before transmitting and use settings
+permitted in your location. See the SAMD reference project's RFM9x instructions
+for its separate breakout wiring (its control pin drives EN, not RST).
+
+The STM32 starts at **915 MHz, SF7, 125 kHz, coding rate 4/5, and 13 dBm**,
+matching the SAMD echo deployment. The STM32 frequency fallback is configured
+in `Components/RadioTest/RadioTest.fpp`; an existing parameter-database value
+takes precedence. The other profile values are the Rfm9X manager defaults.
+Parameter SET commands can change the running profile; any subsequently loaded
+saved values must match the peer. MicroFs is RAM-backed, so settings do not
+survive a power cycle.
+
+UART remains the GDS link; the radio carries raw packets, not F Prime frames.
+After both radios report `RadioReady`, send `Rfm9X.rfm9XManager.SEND_STRING`
+from the STM32 GDS with a nonempty printable ASCII payload of at most 16
+characters (the deployment's command-string limit). The SAMD echoes the
+payload. The STM32 reports it in `ReferenceDeployment.radioTest.ReplySegment` events, with byte
+offset and total length, and returns the receive buffer without transmitting
+again. Longer received packets are displayed in 32-byte segments; nonprintable
+bytes are displayed as `.`. `PacketsTransmitted`, `PacketsReceived`,
+`RadioState`, and warning events help diagnose failures. Wait for the reply
+before sending another test packet.
+
+The simulated radio round-trip tests can be run with:
+
+```shell
+fprime-venv/bin/fprime-util generate --ut native
+fprime-venv/bin/cmake --build build-fprime-automatic-native-ut \
+    --target FprimeStm32BaremetalReference_Components_RadioTest_ut_exe
+fprime-venv/bin/ctest --test-dir build-fprime-automatic-native-ut --output-on-failure \
+    -R '^FprimeStm32BaremetalReference_Components_RadioTest_ut_exe$'
+```
+
+These tests do not replace an over-the-air test with the two physical boards.
+
 ## Static memory contract
 
 The deployment is designed to avoid dynamic allocation after initialization.
