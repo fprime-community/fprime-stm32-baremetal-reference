@@ -159,6 +159,14 @@ Two independent layers of automated testing back this deployment:
   and `uart_integration_tests.py` drive commands over the live ground link
   and assert on the resulting events/telemetry.
 
+For a manually dispatched HIL workflow, the `integration_tests` input selects
+space-separated paths from the downloaded `int/` directory, for example
+`int/smoke_integration_tests.py int/imu_manager_integration_tests.py`.
+Use `int/` to run the full suite. If omitted, the dispatch runs the smoke,
+IMU manager, and BMP manager tests; push, pull request, and scheduled runs
+continue to run the full suite. Callers such as `nasa/fprime` can pass this
+input in their workflow dispatch.
+
 ## Current follow-up work
 
 - Re-verify the bootstrap-pool usage figure live on hardware (it's a runtime
