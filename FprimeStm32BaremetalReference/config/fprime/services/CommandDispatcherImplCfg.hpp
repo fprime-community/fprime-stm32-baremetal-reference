@@ -14,9 +14,9 @@
 #include <Fw/FPrimeBasicTypes.hpp>
 
 enum {
-    // Must be >= number of opcodes registered in the topology (48 today).
-    // 64 leaves headroom for new commands (e.g. the USART driver).
-    CMD_DISPATCHER_DISPATCH_TABLE_SIZE = 64,  // !< The size of the table holding opcodes to dispatch
+    // Must be >= number of opcodes registered in the topology. Previously 64
+    // (sized for 48 opcodes); Raised to 80 for headroom.
+    CMD_DISPATCHER_DISPATCH_TABLE_SIZE = 80,  // !< The size of the table holding opcodes to dispatch
     // Number of commands that may be in-progress (awaiting a response)
     // simultaneously. The single-threaded cyclic executive dispatches one
     // command response at a time; 16 preserves ample margin over observed
