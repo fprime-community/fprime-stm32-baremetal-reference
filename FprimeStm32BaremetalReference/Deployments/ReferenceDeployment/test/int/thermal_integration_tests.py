@@ -71,6 +71,13 @@ COOLDOWN_REQUIRED_DECREASES = 3
 COOLDOWN_MIN_STEP_DROP_C = 0.05
 COOLDOWN_MAX_SECONDS = 420
 
+# Before baselining for the model check, require BMP280 (the faster, more exposed sensor) to
+# stop drifting - otherwise a prior test's unfinished cooldown gets mistaken for ambient and the
+# model has no way to account for it. Same step/interval as the cooldown test's own trend check.
+SETTLE_MAX_STEP_C = 0.05
+SETTLE_REQUIRED_STABLE_SAMPLES = 3
+SETTLE_MAX_SECONDS = 300
+
 SAMPLE_TIMEOUT = 15
 
 pytestmark = pytest.mark.skipif(
@@ -98,6 +105,28 @@ def _latest_temperature(fprime_test_api, channel):
     return samples[-1].get_val()["temperature"]
 
 
+def _wait_for_thermal_settle(fprime_test_api):
+    """Block until BMP280 stops drifting (heater off throughout), so a baseline taken right
+    after is actually at ambient and not mid-cooldown from a prior test's heat soak. Bounded by
+    SETTLE_MAX_SECONDS so a genuinely stuck/dead sensor still fails fast instead of hanging."""
+    previous = _latest_temperature(fprime_test_api, BMP_CHANNEL)
+    stable_samples = 1
+    elapsed = 0
+    while stable_samples < SETTLE_REQUIRED_STABLE_SAMPLES:
+        assert elapsed < SETTLE_MAX_SECONDS, (
+            f"BMP280 never settled to ambient within {SETTLE_MAX_SECONDS}s before starting "
+            f"the thermal test - rig may still be cooling down from a prior run"
+        )
+        time.sleep(COOLDOWN_SAMPLE_INTERVAL_SECONDS)
+        elapsed += COOLDOWN_SAMPLE_INTERVAL_SECONDS
+        current = _latest_temperature(fprime_test_api, BMP_CHANNEL)
+        if abs(current - previous) <= SETTLE_MAX_STEP_C:
+            stable_samples += 1
+        else:
+            stable_samples = 1
+        previous = current
+
+
 def _predicted_rise(t, k, tau_s):
     """DeltaT_i(t) for a sensor with coupling k and time constant tau_s under the rig's
     resistor curve (RESISTOR_DELTA_INF_C, RESISTOR_TAU_S). t=0 is heater-on."""
@@ -121,6 +150,8 @@ def test_heater_raises_both_sensor_temperatures_per_model(fprime_test_api):
     Covers: JPL P-2.2.6 (test as you fly - a real thermal stimulus, not simulated),
     DR-4.11.5.4 (stress testing).
     """
+    _wait_for_thermal_settle(fprime_test_api)
+
     imu_baseline = _latest_temperature(fprime_test_api, IMU_CHANNEL)
     bmp_baseline = _latest_temperature(fprime_test_api, BMP_CHANNEL)
 
@@ -156,6 +187,8 @@ def test_bmp_temperature_falls_after_heater_off(fprime_test_api):
     timeout and is intentionally not checked here - see module docstring.
     Covers: DR-4.11.5.4 (stress testing) - recovery half of the thermal cycle.
     """
+    _wait_for_thermal_settle(fprime_test_api)
+
     _set_heater(on=True)
     time.sleep(HEAT_SOAK_SECONDS)
     bmp_heated = _latest_temperature(fprime_test_api, BMP_CHANNEL)
