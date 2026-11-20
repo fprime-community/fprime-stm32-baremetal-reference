@@ -28,7 +28,9 @@ BMP_CHANNEL = "Bmp280.bmpManager.Reading"
 RESISTOR_DELTA_INF_C = 76.81
 RESISTOR_TAU_S = 240.0
 
-HEAT_SOAK_SECONDS = 90
+HEAT_SOAK_SECONDS = 90  # soak used for the cooldown test's own heat-up phase
+
+MODEL_FIT_SOAK_SECONDS = 240
 BASELINE_READ_SECONDS = 15  # mean-of-samples t=0 baseline, not a settle-wait - see derivation doc
 
 # Guards against starting a heat soak while a sensor is still cooling from a very recent prior run
@@ -116,19 +118,30 @@ def _mean_temperature_settled(fprime_test_api, channel):
     )
 
 
-def _collect_series(fprime_test_api, channel, heater_on_ert, duration):
-    """Dense (elapsed_seconds, temperature) series for one sensor across the heat soak.
+def _collect_series(fprime_test_api, channels, heater_on_ert, duration):
+    """Dense (elapsed_seconds, temperature) series per channel across the heat soak, collected
+    with ONE blocking call so every channel's `t` is relative to the same `heater_on_ert` -
+    collecting channels one at a time would let an earlier channel's wait silently skip a later
+    channel's samples (await_telemetry_count's `start="NOW"` default means a call made 90s late
+    starts searching 90s late, not from heater-on).
 
     Uses each sample's `.ert` (GDS receipt time) rather than `.get_time()` (FSW time), since
     this deployment never sets Svc::OsTime's epoch and FSW timestamps all read as zero.
+
+    Returns {channel: [(t, temperature), ...]}.
     """
     samples = fprime_test_api.await_telemetry_count(
-        10_000, channels=channel, timeout=duration + SAMPLE_TIMEOUT
+        10_000, channels=channels, timeout=duration + SAMPLE_TIMEOUT
     )
-    assert samples, f"No telemetry received on {channel} during heat soak"
-    return [
-        ((s.ert - heater_on_ert).total_seconds(), s.get_val()["temperature"]) for s in samples
-    ]
+    assert samples, f"No telemetry received on {channels} during heat soak"
+    series = {channel: [] for channel in channels}
+    for s in samples:
+        series[s.template.get_full_name()].append(
+            ((s.ert - heater_on_ert).total_seconds(), s.get_val()["temperature"])
+        )
+    for channel in channels:
+        assert series[channel], f"No telemetry received on {channel} during heat soak"
+    return series
 
 
 def _shape(t, tau_s):
@@ -220,11 +233,11 @@ def test_heater_raises_both_sensor_temperatures_per_model(fprime_test_api):
     heater_on_ert = datetime.datetime.now(datetime.timezone.utc)
     _set_heater(on=True)
 
-    imu_series = _collect_series(fprime_test_api, IMU_CHANNEL, heater_on_ert, HEAT_SOAK_SECONDS)
-    bmp_series = _collect_series(fprime_test_api, BMP_CHANNEL, heater_on_ert, HEAT_SOAK_SECONDS)
-
-    imu_series = [(t, temp - imu_baseline) for t, temp in imu_series]
-    bmp_series = [(t, temp - bmp_baseline) for t, temp in bmp_series]
+    series = _collect_series(
+        fprime_test_api, [IMU_CHANNEL, BMP_CHANNEL], heater_on_ert, MODEL_FIT_SOAK_SECONDS
+    )
+    imu_series = [(t, temp - imu_baseline) for t, temp in series[IMU_CHANNEL]]
+    bmp_series = [(t, temp - bmp_baseline) for t, temp in series[BMP_CHANNEL]]
 
     _assert_healthy_thermal_response("IMU", imu_series, IMU_AMPLITUDE_FLOOR_C)
     _assert_healthy_thermal_response("BMP280", bmp_series, BMP_AMPLITUDE_FLOOR_C)
