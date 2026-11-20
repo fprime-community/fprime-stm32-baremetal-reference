@@ -31,6 +31,10 @@ RESISTOR_TAU_S = 240.0
 HEAT_SOAK_SECONDS = 90
 BASELINE_READ_SECONDS = 15  # mean-of-samples t=0 baseline, not a settle-wait - see derivation doc
 
+# Guards against starting a heat soak while a sensor is still cooling from a very recent prior run
+PILEUP_SLOPE_LIMIT_C_PER_S = 0.003
+PILEUP_MAX_RETRIES = 6
+
 # Self-fit acceptance bounds (loose physical sanity checks, not historical-amplitude comparisons)
 R_SQUARED_MIN = 0.8
 TAU_MIN_S = 5.0
@@ -74,14 +78,42 @@ def _latest_temperature(fprime_test_api, channel):
     return samples[-1].get_val()["temperature"]
 
 
-def _mean_temperature_over(fprime_test_api, channel, seconds):
-    """Mean temperature over a fixed read window, used as a sensor's t=0 baseline."""
+def _slope(points):
+    """Least-squares slope of (t, value) points - used to detect an active temperature trend."""
+    n = len(points)
+    mean_t = sum(t for t, _ in points) / n
+    mean_v = sum(v for _, v in points) / n
+    denom = sum((t - mean_t) ** 2 for t, _ in points)
+    if denom <= 0:
+        return 0.0
+    return sum((t - mean_t) * (v - mean_v) for t, v in points) / denom
+
+
+def _baseline_window(fprime_test_api, channel, seconds):
+    """Mean and slope of a fixed read window, used as a sensor's t=0 baseline. The slope flags
+    an active cooldown/warmup trend during the window itself (see _mean_temperature_settled)."""
     samples = fprime_test_api.await_telemetry_count(
         10_000, channels=channel, timeout=seconds + SAMPLE_TIMEOUT
     )
     assert samples, f"No telemetry received on {channel} during baseline read"
-    values = [s.get_val()["temperature"] for s in samples]
-    return sum(values) / len(values)
+    t0 = samples[0].ert
+    points = [((s.ert - t0).total_seconds(), s.get_val()["temperature"]) for s in samples]
+    mean = sum(v for _, v in points) / len(points)
+    return mean, _slope(points)
+
+
+def _mean_temperature_settled(fprime_test_api, channel):
+    """Baseline mean, retrying (bounded) if the window shows an active trend - guards against
+    starting a heat soak while still cooling from a very recent prior run, without an
+    open-ended wait. See PILEUP_SLOPE_LIMIT_C_PER_S."""
+    for _ in range(PILEUP_MAX_RETRIES):
+        mean, slope = _baseline_window(fprime_test_api, channel, BASELINE_READ_SECONDS)
+        if abs(slope) <= PILEUP_SLOPE_LIMIT_C_PER_S:
+            return mean
+    assert False, (
+        f"{channel} is still trending ({slope:+.4f}C/s) after {PILEUP_MAX_RETRIES} baseline "
+        f"reads - rig may still be cooling down from a very recent prior run"
+    )
 
 
 def _collect_series(fprime_test_api, channel, heater_on_ert, duration):
@@ -182,8 +214,8 @@ def test_heater_raises_both_sensor_temperatures_per_model(fprime_test_api):
     Covers: JPL P-2.2.6 (test as you fly - a real thermal stimulus, not simulated),
     DR-4.11.5.4 (stress testing).
     """
-    imu_baseline = _mean_temperature_over(fprime_test_api, IMU_CHANNEL, BASELINE_READ_SECONDS)
-    bmp_baseline = _mean_temperature_over(fprime_test_api, BMP_CHANNEL, BASELINE_READ_SECONDS)
+    imu_baseline = _mean_temperature_settled(fprime_test_api, IMU_CHANNEL)
+    bmp_baseline = _mean_temperature_settled(fprime_test_api, BMP_CHANNEL)
 
     heater_on_ert = datetime.datetime.now(datetime.timezone.utc)
     _set_heater(on=True)
