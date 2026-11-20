@@ -4,8 +4,7 @@ and confirm each sensor's telemetry responds like a real first-order thermal mas
 
 Each run fits its own response curve from its own heat-soak data (self-calibrating) instead of
 comparing against a fixed historical amplitude, so the test stays valid as the rig ages or the
-room's ambient temperature drifts across seasons. Full derivation and design rationale:
-thermal_model_derivation.md (next to this file).
+room's ambient temperature drifts across seasons.
 
 @note Run with: pytest FprimeStm32BaremetalReference/Deployments/ReferenceDeployment/test/int/thermal_integration_tests.py \
     --dictionary build-artifacts/stm32h7/ReferenceDeployment/dict/ReferenceDeploymentTopologyDictionary.json
@@ -24,14 +23,14 @@ HEATER_PIN = 24  # high = on
 IMU_CHANNEL = "MpuImu.imuManager.Reading"
 BMP_CHANNEL = "Bmp280.bmpManager.Reading"
 
-# Resistor's own heating curve (rig characteristic, not sensor calibration - see derivation doc).
+# Resistor's own heating curve (rig characteristic, not sensor calibration).
 RESISTOR_DELTA_INF_C = 76.81
 RESISTOR_TAU_S = 240.0
 
 HEAT_SOAK_SECONDS = 90  # soak used for the cooldown test's own heat-up phase
 
 MODEL_FIT_SOAK_SECONDS = 240
-BASELINE_READ_SECONDS = 15  # mean-of-samples t=0 baseline, not a settle-wait - see derivation doc
+BASELINE_READ_SECONDS = 15  # mean-of-samples t=0 baseline, not a settle-wait
 
 # Guards against starting a heat soak while a sensor is still cooling from a very recent prior run
 PILEUP_SLOPE_LIMIT_C_PER_S = 0.003
@@ -146,8 +145,7 @@ def _collect_series(fprime_test_api, channels, heater_on_ert, duration):
 
 def _shape(t, tau_s):
     """Dimensionless response shape for time constant tau_s under the resistor's curve
-    (RESISTOR_TAU_S). DeltaT(t) = k * RESISTOR_DELTA_INF_C * _shape(t, tau). See
-    thermal_model_derivation.md for the ODE this comes from."""
+    (RESISTOR_TAU_S). DeltaT(t) = k * RESISTOR_DELTA_INF_C * _shape(t, tau)."""
     if t <= 0:
         return 0.0
     tau_r = RESISTOR_TAU_S
@@ -188,8 +186,7 @@ def _fit_thermal_response(series):
 
 
 def _assert_healthy_thermal_response(sensor_name, series, amplitude_floor_c):
-    """R^2 + amplitude floor + tau bounds + pointwise-outlier check. See
-    thermal_model_derivation.md for why each one is needed."""
+    """R^2 + amplitude floor + tau bounds + pointwise-outlier check."""
     k, tau_s, r_squared, residuals = _fit_thermal_response(series)
     amplitude_c = k * RESISTOR_DELTA_INF_C
 
