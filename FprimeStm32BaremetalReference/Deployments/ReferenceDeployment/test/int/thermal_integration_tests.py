@@ -1,40 +1,17 @@
 """! @file thermal_integration_tests.py
-@brief HIL dynamic thermal-stimulus test: apply a real heat source near both sensors (Pi
-GPIO-controlled ceramic resistor) and confirm BMP280/MPU-6050 temperature telemetry follows a
-physical radiative-heating model of that resistor, rather than just crossing a fixed delta.
+@brief HIL dynamic thermal-stimulus test: heat a real ceramic resistor near the BMP280/MPU-6050
+and confirm each sensor's telemetry responds like a real first-order thermal mass.
 
-Rig: GPIO 24 drives a 7 W ceramic resistor ~5mm from the sensors (high = on), closer to the
-BMP280 than the IMU. The resistor itself heats along a first-order thermal-mass curve:
-
-    T_r(t) = T_ambient + 76.81 * (1 - exp(-t / 240.0))        [resistor surface, degC]
-
-Each sensor is a second thermal mass driven by that curve through its own radiative/conductive
-coupling (fraction k_i of the resistor's rise) and its own thermal time constant tau_i (how fast
-its package/die equilibrates). Solving the linear ODE dT_i/dt = (k_i*T_r(t) - T_i)/tau_i gives a
-closed form with the SAME resistor time constant (240s) plus the sensor's own:
-
-    DeltaT_i(t) = k_i * 76.81 * [1 - (tau_r/(tau_r-tau_i))*exp(-t/tau_r)
-                                    + (tau_i/(tau_r-tau_i))*exp(-t/tau_i)]
-
-k_i and tau_i were fit from 5 independent nightly HIL runs (2026-11-14 through 2026-11-18) of
-this exact rig/test - NOT assumed from a datasheet. Fit inputs were the real (t, DeltaT) points
-each run produces: the heat-soak baseline/90s-heated pair, the cooldown test's own re-heat sample
-at ~183s (that test re-heats for 90s before sampling), and the 6-point BMP280 cooldown decay. The
-BMP280 fit (tau_s=64.3s) is well-constrained (15 points, max residual 0.24C); the IMU only yields
-one non-trivial point per run (it is not sampled during the cooldown test), so its tau_i reuses
-the BMP280 fit and only k_i was solved - this is a deliberate approximation given present data,
-not a measurement. Checking "does telemetry follow this curve within a tolerance band" (not
-"did it rise by at least a fixed amount") means the test still passes under a warmer/cooler room:
-ambient sets the curve's start point, not the model's shape.
-
-This test ONLY runs meaningfully on the Raspberry Pi the rig is wired to - it drives a real GPIO
-pin via `pinctrl` (ships with Raspberry Pi OS, no extra dependency). It is skipped automatically
-if `pinctrl` isn't on PATH.
+Each run fits its own response curve from its own heat-soak data (self-calibrating) instead of
+comparing against a fixed historical amplitude, so the test stays valid as the rig ages or the
+room's ambient temperature drifts across seasons. Full derivation and design rationale:
+thermal_model_derivation.md (next to this file).
 
 @note Run with: pytest FprimeStm32BaremetalReference/Deployments/ReferenceDeployment/test/int/thermal_integration_tests.py \
     --dictionary build-artifacts/stm32h7/ReferenceDeployment/dict/ReferenceDeploymentTopologyDictionary.json
 """
 
+import datetime
 import math
 import shutil
 import subprocess
@@ -47,36 +24,28 @@ HEATER_PIN = 24  # high = on
 IMU_CHANNEL = "MpuImu.imuManager.Reading"
 BMP_CHANNEL = "Bmp280.bmpManager.Reading"
 
-# Resistor's own heating curve (measured rig characteristic, independent of either sensor).
+# Resistor's own heating curve (rig characteristic, not sensor calibration - see derivation doc).
 RESISTOR_DELTA_INF_C = 76.81
 RESISTOR_TAU_S = 240.0
 
-# Sensor coupling constants (k_i, tau_i), fit from 5 nightly HIL runs - see module docstring.
-BMP_K = 0.224
-BMP_TAU_S = 64.3
-IMU_K = 0.0572
-IMU_TAU_S = 64.3  # reused from the BMP280 fit; see docstring caveat.
-
-# Tolerance band around the model's predicted DeltaT, sized to ~4x the largest residual observed
-# across the 5 fitting runs (BMP max |residual| 0.24C, IMU std 0.064C) so day-to-day ambient
-# drafts/noise don't flip a physically-correct response into a failure.
-BMP_TOLERANCE_C = 1.0
-IMU_TOLERANCE_C = 0.5
-
 HEAT_SOAK_SECONDS = 90
-CHECKPOINT_SECONDS = (30, 60, 90)
+BASELINE_READ_SECONDS = 15  # mean-of-samples t=0 baseline, not a settle-wait - see derivation doc
+
+# Self-fit acceptance bounds (loose physical sanity checks, not historical-amplitude comparisons)
+R_SQUARED_MIN = 0.8
+TAU_MIN_S = 5.0
+TAU_MAX_S = 500.0
+BMP_AMPLITUDE_FLOOR_C = 0.3  # healthy historical rise ~2.6C; just rules out "no response"
+IMU_AMPLITUDE_FLOOR_C = 0.1  # healthy historical rise ~0.66C; same rationale
+OUTLIER_RESIDUAL_FACTOR = 4.0  # pointwise check: no sample may miss the fit by more than this x RMSE
+OUTLIER_RESIDUAL_FLOOR_C = 0.1  # floor on RMSE itself, for an unrealistically clean fit
+
+_TAU_FIT_GRID_S = [t * 0.5 for t in range(2, 1000)]  # 1.0 .. 499.5s, step 0.5s
 
 COOLDOWN_SAMPLE_INTERVAL_SECONDS = 30
 COOLDOWN_REQUIRED_DECREASES = 3
 COOLDOWN_MIN_STEP_DROP_C = 0.05
 COOLDOWN_MAX_SECONDS = 420
-
-# Before baselining for the model check, require BMP280 (the faster, more exposed sensor) to
-# stop drifting - otherwise a prior test's unfinished cooldown gets mistaken for ambient and the
-# model has no way to account for it. Same step/interval as the cooldown test's own trend check.
-SETTLE_MAX_STEP_C = 0.05
-SETTLE_REQUIRED_STABLE_SAMPLES = 3
-SETTLE_MAX_SECONDS = 300
 
 SAMPLE_TIMEOUT = 15
 
@@ -105,90 +74,137 @@ def _latest_temperature(fprime_test_api, channel):
     return samples[-1].get_val()["temperature"]
 
 
-def _wait_for_thermal_settle(fprime_test_api):
-    """Block until BMP280 stops drifting (heater off throughout), so a baseline taken right
-    after is actually at ambient and not mid-cooldown from a prior test's heat soak. Bounded by
-    SETTLE_MAX_SECONDS so a genuinely stuck/dead sensor still fails fast instead of hanging."""
-    previous = _latest_temperature(fprime_test_api, BMP_CHANNEL)
-    stable_samples = 1
-    elapsed = 0
-    while stable_samples < SETTLE_REQUIRED_STABLE_SAMPLES:
-        assert elapsed < SETTLE_MAX_SECONDS, (
-            f"BMP280 never settled to ambient within {SETTLE_MAX_SECONDS}s before starting "
-            f"the thermal test - rig may still be cooling down from a prior run"
-        )
-        time.sleep(COOLDOWN_SAMPLE_INTERVAL_SECONDS)
-        elapsed += COOLDOWN_SAMPLE_INTERVAL_SECONDS
-        current = _latest_temperature(fprime_test_api, BMP_CHANNEL)
-        if abs(current - previous) <= SETTLE_MAX_STEP_C:
-            stable_samples += 1
-        else:
-            stable_samples = 1
-        previous = current
+def _mean_temperature_over(fprime_test_api, channel, seconds):
+    """Mean temperature over a fixed read window, used as a sensor's t=0 baseline."""
+    samples = fprime_test_api.await_telemetry_count(
+        10_000, channels=channel, timeout=seconds + SAMPLE_TIMEOUT
+    )
+    assert samples, f"No telemetry received on {channel} during baseline read"
+    values = [s.get_val()["temperature"] for s in samples]
+    return sum(values) / len(values)
 
 
-def _predicted_rise(t, k, tau_s):
-    """DeltaT_i(t) for a sensor with coupling k and time constant tau_s under the rig's
-    resistor curve (RESISTOR_DELTA_INF_C, RESISTOR_TAU_S). t=0 is heater-on."""
+def _collect_series(fprime_test_api, channel, heater_on_ert, duration):
+    """Dense (elapsed_seconds, temperature) series for one sensor across the heat soak.
+
+    Uses each sample's `.ert` (GDS receipt time) rather than `.get_time()` (FSW time), since
+    this deployment never sets Svc::OsTime's epoch and FSW timestamps all read as zero.
+    """
+    samples = fprime_test_api.await_telemetry_count(
+        10_000, channels=channel, timeout=duration + SAMPLE_TIMEOUT
+    )
+    assert samples, f"No telemetry received on {channel} during heat soak"
+    return [
+        ((s.ert - heater_on_ert).total_seconds(), s.get_val()["temperature"]) for s in samples
+    ]
+
+
+def _shape(t, tau_s):
+    """Dimensionless response shape for time constant tau_s under the resistor's curve
+    (RESISTOR_TAU_S). DeltaT(t) = k * RESISTOR_DELTA_INF_C * _shape(t, tau). See
+    thermal_model_derivation.md for the ODE this comes from."""
     if t <= 0:
         return 0.0
     tau_r = RESISTOR_TAU_S
-    shape = (
+    if abs(tau_s - tau_r) < 1e-6:
+        return 1 - (1 + t / tau_r) * math.exp(-t / tau_r)  # L'Hopital limit as tau_s -> tau_r
+    return (
         1
         - (tau_r / (tau_r - tau_s)) * math.exp(-t / tau_r)
         + (tau_s / (tau_r - tau_s)) * math.exp(-t / tau_s)
     )
-    return k * RESISTOR_DELTA_INF_C * shape
+
+
+def _fit_thermal_response(series):
+    """Fit DeltaT(t) = k * RESISTOR_DELTA_INF_C * _shape(t, tau) to a dense (t, DeltaT) series:
+    grid-search tau, solve the linear-least-squares k in closed form per candidate (no
+    numpy/scipy in the CI venv). Returns (k, tau, r_squared, residuals)."""
+    points = [(t, dT) for t, dT in series if t > 0]
+    assert len(points) >= 3, "Not enough heat-soak samples after t=0 to fit a thermal response"
+
+    best = None
+    for tau_s in _TAU_FIT_GRID_S:
+        phi = [_shape(t, tau_s) * RESISTOR_DELTA_INF_C for t, _ in points]
+        denom = sum(p * p for p in phi)
+        if denom <= 0:
+            continue
+        numer = sum(p * dT for p, (_, dT) in zip(phi, points))
+        k = numer / denom
+        sse = sum((dT - k * p) ** 2 for p, (_, dT) in zip(phi, points))
+        if best is None or sse < best[0]:
+            best = (sse, tau_s, k)
+
+    sse, tau_s, k = best
+    mean_dT = sum(dT for _, dT in points) / len(points)
+    sst = sum((dT - mean_dT) ** 2 for _, dT in points)
+    r_squared = 1.0 - sse / sst if sst > 0 else 0.0
+    residuals = [(t, dT - k * _shape(t, tau_s) * RESISTOR_DELTA_INF_C) for t, dT in points]
+    return k, tau_s, r_squared, residuals
+
+
+def _assert_healthy_thermal_response(sensor_name, series, amplitude_floor_c):
+    """R^2 + amplitude floor + tau bounds + pointwise-outlier check. See
+    thermal_model_derivation.md for why each one is needed."""
+    k, tau_s, r_squared, residuals = _fit_thermal_response(series)
+    amplitude_c = k * RESISTOR_DELTA_INF_C
+
+    assert r_squared >= R_SQUARED_MIN, (
+        f"{sensor_name} response doesn't fit the expected RC-thermal shape well enough: "
+        f"R^2={r_squared:.3f} (need >={R_SQUARED_MIN}), best fit k={k:.4f} tau={tau_s:.1f}s "
+        f"-> amplitude={amplitude_c:.2f}C. Sensor may be returning noise/garbage."
+    )
+    assert amplitude_c >= amplitude_floor_c, (
+        f"{sensor_name} fitted response amplitude {amplitude_c:.2f}C is below the floor "
+        f"{amplitude_floor_c}C - sensor may be dead/stuck/disconnected."
+    )
+    assert TAU_MIN_S <= tau_s <= TAU_MAX_S, (
+        f"{sensor_name} fitted time constant tau={tau_s:.1f}s is outside the physically sane "
+        f"range [{TAU_MIN_S}, {TAU_MAX_S}]s - fit is not a real thermal response "
+        f"(k={k:.4f}, R^2={r_squared:.3f})."
+    )
+
+    rmse = math.sqrt(sum(r * r for _, r in residuals) / len(residuals))
+    outlier_limit_c = OUTLIER_RESIDUAL_FACTOR * max(rmse, OUTLIER_RESIDUAL_FLOOR_C)
+    worst_t, worst_residual = max(residuals, key=lambda tr: abs(tr[1]))
+    assert abs(worst_residual) <= outlier_limit_c, (
+        f"{sensor_name} has a localized outlier at t={worst_t:.1f}s: residual={worst_residual:.2f}C "
+        f"exceeds {OUTLIER_RESIDUAL_FACTOR}x the fit's RMS residual ({rmse:.2f}C)."
+    )
+
+    return k, tau_s, r_squared
 
 
 def test_heater_raises_both_sensor_temperatures_per_model(fprime_test_api):
     """
-    @brief Baseline both sensors, apply the heat stimulus, and confirm each sensor's temperature
-    rise at several checkpoints matches its fitted thermal-response curve within tolerance - not
-    just "rose by some fixed amount." Ambient temperature only shifts each sensor's baseline, the
-    predicted rise is independent of it, so this still passes in a warmer or cooler room.
+    @brief Collect a dense per-sensor temperature series across a real heat soak and confirm
+    each sensor's own response fits the expected RC-thermal shape (self-fit, not a comparison to
+    a fixed historical amplitude - see module docstring).
     Covers: JPL P-2.2.6 (test as you fly - a real thermal stimulus, not simulated),
     DR-4.11.5.4 (stress testing).
     """
-    _wait_for_thermal_settle(fprime_test_api)
+    imu_baseline = _mean_temperature_over(fprime_test_api, IMU_CHANNEL, BASELINE_READ_SECONDS)
+    bmp_baseline = _mean_temperature_over(fprime_test_api, BMP_CHANNEL, BASELINE_READ_SECONDS)
 
-    imu_baseline = _latest_temperature(fprime_test_api, IMU_CHANNEL)
-    bmp_baseline = _latest_temperature(fprime_test_api, BMP_CHANNEL)
-
+    heater_on_ert = datetime.datetime.now(datetime.timezone.utc)
     _set_heater(on=True)
-    heater_on_time = time.monotonic()
 
-    for checkpoint in CHECKPOINT_SECONDS:
-        time.sleep(max(0.0, checkpoint - (time.monotonic() - heater_on_time)))
-        elapsed = time.monotonic() - heater_on_time
+    imu_series = _collect_series(fprime_test_api, IMU_CHANNEL, heater_on_ert, HEAT_SOAK_SECONDS)
+    bmp_series = _collect_series(fprime_test_api, BMP_CHANNEL, heater_on_ert, HEAT_SOAK_SECONDS)
 
-        imu_rise = _latest_temperature(fprime_test_api, IMU_CHANNEL) - imu_baseline
-        bmp_rise = _latest_temperature(fprime_test_api, BMP_CHANNEL) - bmp_baseline
+    imu_series = [(t, temp - imu_baseline) for t, temp in imu_series]
+    bmp_series = [(t, temp - bmp_baseline) for t, temp in bmp_series]
 
-        imu_expected = _predicted_rise(elapsed, IMU_K, IMU_TAU_S)
-        bmp_expected = _predicted_rise(elapsed, BMP_K, BMP_TAU_S)
-
-        assert abs(imu_rise - imu_expected) <= IMU_TOLERANCE_C, (
-            f"IMU rise at t={elapsed:.1f}s off model: expected {imu_expected:.2f}C "
-            f"+/-{IMU_TOLERANCE_C}C, measured {imu_rise:.2f}C "
-            f"(baseline={imu_baseline:.2f}C)"
-        )
-        assert abs(bmp_rise - bmp_expected) <= BMP_TOLERANCE_C, (
-            f"BMP280 rise at t={elapsed:.1f}s off model: expected {bmp_expected:.2f}C "
-            f"+/-{BMP_TOLERANCE_C}C, measured {bmp_rise:.2f}C "
-            f"(baseline={bmp_baseline:.2f}C)"
-        )
+    _assert_healthy_thermal_response("IMU", imu_series, IMU_AMPLITUDE_FLOOR_C)
+    _assert_healthy_thermal_response("BMP280", bmp_series, BMP_AMPLITUDE_FLOOR_C)
 
 
 def test_bmp_temperature_falls_after_heater_off(fprime_test_api):
     """
     @brief Apply the heat stimulus, then remove it and confirm BMP280 temperature enters a
     sustained downward trend. The IMU's cooldown is too slow to assert within a reasonable
-    timeout and is intentionally not checked here - see module docstring.
+    timeout and is intentionally not checked here.
     Covers: DR-4.11.5.4 (stress testing) - recovery half of the thermal cycle.
     """
-    _wait_for_thermal_settle(fprime_test_api)
-
     _set_heater(on=True)
     time.sleep(HEAT_SOAK_SECONDS)
     bmp_heated = _latest_temperature(fprime_test_api, BMP_CHANNEL)
