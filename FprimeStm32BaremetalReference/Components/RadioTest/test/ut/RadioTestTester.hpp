@@ -13,8 +13,11 @@ class RadioTestTester final : public RadioTestGTestBase {
     ~RadioTestTester();
     void testParameters();
     void testReply();
+    void testSendString();
     RadioTest& getComponent() { return this->component; }
     void assertReply(const char* payload, U32 size);
+    void assertSendAccepted();
+    void sendString(const char* payload);
 
   private:
     void initComponents();
@@ -22,10 +25,13 @@ class RadioTestTester final : public RadioTestGTestBase {
     Fw::ParamValid from_getStoredParameter_handler(FwIndexType portNum,
                                                    FwPrmIdType id,
                                                    Fw::ParamBuffer& value) override;
+    void from_transmit_handler(FwIndexType portNum, Fw::Buffer& data,
+                               const ComCfg::FrameContext& context) override;
 
     RadioTest component;
     Fw::ParamValid storedValidity;
     U32 storedValue;
+    bool returnImmediately;
 };
 
 }  // namespace ReferenceDeployment

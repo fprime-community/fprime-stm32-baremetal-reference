@@ -32,6 +32,8 @@ class RadioRoundTripTester final : public Rfm9X::Rfm9XManagerGTestBase {
         this->radio.set_allocate_OutputPort(0, this->get_from_allocate(0));
         this->radio.set_deallocate_OutputPort(0, this->get_from_deallocate(0));
         this->radio.set_dataOut_OutputPort(0, this->support.getComponent().get_receive_InputPort(0));
+        this->radio.set_dataReturnOut_OutputPort(0, this->support.getComponent().get_sendReturn_InputPort(0));
+        this->support.getComponent().set_transmit_OutputPort(0, this->radio.get_dataIn_InputPort(0));
         this->support.getComponent().set_returnBuffer_OutputPort(0, this->radio.get_dataReturnIn_InputPort(0));
         this->radio.set_resetGpio_OutputPort(0, this->get_from_resetGpio(0));
         this->radio.set_spiWriteRead_OutputPort(0, this->get_from_spiWriteRead(0));
@@ -56,9 +58,8 @@ class RadioRoundTripTester final : public Rfm9X::Rfm9XManagerGTestBase {
         ASSERT_EQ(this->model.readRegisterValue(Rfm9X::Reg::MODEM_CONFIG_2), 0x74);
 
         const char message[] = "hello SAMD";
-        this->sendCmd_SEND_STRING(0, 0, Fw::CmdStringArg(message));
-        ASSERT_CMD_RESPONSE_SIZE(1);
-        ASSERT_EQ(this->cmdResponseHistory->at(0).response, Fw::CmdResponse::OK);
+        this->support.sendString(message);
+        this->support.assertSendAccepted();
 
         U8 sent[255] = {};
         FwSizeType size = 0;

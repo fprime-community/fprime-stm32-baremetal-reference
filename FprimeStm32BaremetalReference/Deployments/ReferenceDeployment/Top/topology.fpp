@@ -149,6 +149,8 @@ module ReferenceDeployment {
       Rfm9X.rfm9XManager.deallocate -> ComCcsds.commsBufferManager.bufferSendIn
       Rfm9X.rfm9XManager.dataOut -> radioTest.receive
       radioTest.returnBuffer -> Rfm9X.rfm9XManager.dataReturnIn
+      radioTest.transmit -> Rfm9X.rfm9XManager.dataIn
+      Rfm9X.rfm9XManager.dataReturnOut -> radioTest.sendReturn
       Rfm9X.rfm9XManager.prmGet -> radioTest.getParameter
       Rfm9X.rfm9XManager.prmSet -> FileHandling.prmDb.setPrm
       radioTest.getStoredParameter -> FileHandling.prmDb.getPrm

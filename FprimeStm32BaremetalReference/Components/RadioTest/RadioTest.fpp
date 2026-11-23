@@ -6,6 +6,13 @@ module ReferenceDeployment {
     passive component RadioTest {
         sync input port receive: Svc.ComDataWithContext
         output port returnBuffer: Svc.ComDataWithContext
+        output port transmit: Svc.ComDataWithContext
+        sync input port sendReturn: Svc.ComDataWithContext
+
+        sync command SEND_STRING(payload: string)
+        command reg port CmdReg
+        command recv port CmdDisp
+        command resp port CmdStatus
 
         sync input port getParameter: Fw.PrmGet
         output port getStoredParameter: Fw.PrmGet
@@ -13,6 +20,11 @@ module ReferenceDeployment {
         time get port timeCaller
         event port logOut
         text event port logTextOut
+
+        event TestPayloadQueued(payloadSize: FwSizeType) severity activity high \
+            format "Queued {} byte command payload for transmission"
+        event TestSendRejected severity warning high \
+            format "Test message rejected"
 
         @ A printable ASCII segment of a received radio packet.
         event ReplySegment(offset: U32, total: U32, payload: string size 32) \

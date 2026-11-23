@@ -94,7 +94,7 @@ saved values must match the peer. MicroFs is RAM-backed, so settings do not
 survive a power cycle.
 
 UART remains the GDS link; the radio carries raw packets, not F Prime frames.
-After both radios report `RadioReady`, send `Rfm9X.rfm9XManager.SEND_STRING`
+After both radios report `RadioReady`, send `ReferenceDeployment.radioTest.SEND_STRING`
 from the STM32 GDS with a nonempty printable ASCII payload of at most 16
 characters (the deployment's command-string limit). The SAMD echoes the
 payload. The STM32 reports it in `ReferenceDeployment.radioTest.ReplySegment` events, with byte
@@ -102,7 +102,9 @@ offset and total length, and returns the receive buffer without transmitting
 again. Longer received packets are displayed in 32-byte segments; nonprintable
 bytes are displayed as `.`. `PacketsTransmitted`, `PacketsReceived`,
 `RadioState`, and warning events help diagnose failures. Wait for the reply
-before sending another test packet.
+before sending another test packet. A successful command means that the
+payload was submitted to the radio, not that RF transmission completed.
+The radio's local queue may defer it while busy.
 
 The simulated radio round-trip tests can be run with:
 
@@ -115,6 +117,17 @@ fprime-venv/bin/ctest --test-dir build-fprime-automatic-native-ut --output-on-fa
 ```
 
 These tests do not replace an over-the-air test with the two physical boards.
+
+The radio's transmit gate uses the most recently read `SignalDetected` bit
+and existing holdoffs; it waits for a successful status read after startup,
+reset, reconfiguration, or a status-read error. `RxOngoing` alone does not
+block a send because it was observed set on an idle receiver. This is a
+best-effort check, not a collision-free channel assessment, listen-before-talk
+implementation, or regulatory compliance mechanism.
+
+SPI5 retains its idle clock level between transfers, including transactions
+for the BMP280 on the shared bus. Supply the radio from a stable source able
+to support its transmit current; a power dip can cause a transmit fault.
 
 ## Static memory contract
 

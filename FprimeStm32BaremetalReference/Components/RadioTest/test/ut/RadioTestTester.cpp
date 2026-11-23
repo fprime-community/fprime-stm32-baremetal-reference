@@ -6,7 +6,8 @@ RadioTestTester::RadioTestTester()
     : RadioTestGTestBase("RadioTestTester", 16),
       component("RadioTest"),
       storedValidity(Fw::ParamValid::INVALID),
-      storedValue(0) {
+      storedValue(0),
+      returnImmediately(false) {
     this->initComponents();
     this->connectPorts();
     this->component.configure(0x1003);
@@ -25,6 +26,14 @@ Fw::ParamValid RadioTestTester::from_getStoredParameter_handler(FwIndexType port
         EXPECT_EQ(value.serializeFrom(this->storedValue), Fw::FW_SERIALIZE_OK);
     }
     return this->storedValidity;
+}
+
+void RadioTestTester::from_transmit_handler(FwIndexType portNum, Fw::Buffer& data,
+                                            const ComCfg::FrameContext& context) {
+    this->pushFromPortEntry_transmit(data, context);
+    if (this->returnImmediately) {
+        this->invoke_to_sendReturn(0, data, context);
+    }
 }
 
 void RadioTestTester::testParameters() {
@@ -73,9 +82,47 @@ void RadioTestTester::testReply() {
     ASSERT_from_returnBuffer(0, binaryBuffer, context);
 }
 
+void RadioTestTester::testSendString() {
+    this->sendCmd_SEND_STRING(0, 0, Fw::CmdStringArg(""));
+    ASSERT_CMD_RESPONSE(0, RadioTestComponentBase::OPCODE_SEND_STRING, 0, Fw::CmdResponse::EXECUTION_ERROR);
+    this->clearHistory();
+    this->sendCmd_SEND_STRING(0, 1, Fw::CmdStringArg("hi"));
+    ASSERT_CMD_RESPONSE(0, RadioTestComponentBase::OPCODE_SEND_STRING, 1, Fw::CmdResponse::OK);
+    ASSERT_from_transmit_SIZE(1);
+    Fw::Buffer sent = this->fromPortHistory_transmit->at(0).data;
+    ComCfg::FrameContext context = this->fromPortHistory_transmit->at(0).context;
+    ASSERT_EQ(sent.getSize(), 2u);
+    ASSERT_EQ(sent.getData()[0], 'h');
+    ASSERT_EQ(sent.getData()[1], 'i');
+    this->sendCmd_SEND_STRING(0, 2, Fw::CmdStringArg("no"));
+    ASSERT_CMD_RESPONSE(1, RadioTestComponentBase::OPCODE_SEND_STRING, 2, Fw::CmdResponse::EXECUTION_ERROR);
+    this->invoke_to_sendReturn(0, sent, context);
+    this->sendCmd_SEND_STRING(0, 3, Fw::CmdStringArg("ok"));
+    ASSERT_CMD_RESPONSE(2, RadioTestComponentBase::OPCODE_SEND_STRING, 3, Fw::CmdResponse::OK);
+    Fw::Buffer second = this->fromPortHistory_transmit->at(1).data;
+    this->invoke_to_sendReturn(0, second, context);
+    this->returnImmediately = true;
+    this->sendCmd_SEND_STRING(0, 4, Fw::CmdStringArg("x"));
+    ASSERT_CMD_RESPONSE(3, RadioTestComponentBase::OPCODE_SEND_STRING, 4, Fw::CmdResponse::EXECUTION_ERROR);
+    this->returnImmediately = false;
+    this->sendCmd_SEND_STRING(0, 5, Fw::CmdStringArg("y"));
+    ASSERT_CMD_RESPONSE(4, RadioTestComponentBase::OPCODE_SEND_STRING, 5, Fw::CmdResponse::OK);
+    Fw::Buffer last = this->fromPortHistory_transmit->at(3).data;
+    this->invoke_to_sendReturn(0, last, context);
+}
+
 void RadioTestTester::assertReply(const char* payload, U32 size) {
     ASSERT_EVENTS_ReplySegment_SIZE(1);
     ASSERT_EVENTS_ReplySegment(0, 0, size, payload);
+}
+
+void RadioTestTester::assertSendAccepted() {
+    ASSERT_CMD_RESPONSE_SIZE(1);
+    ASSERT_EQ(this->cmdResponseHistory->at(0).response, Fw::CmdResponse::OK);
+}
+
+void RadioTestTester::sendString(const char* payload) {
+    this->sendCmd_SEND_STRING(0, 0, Fw::CmdStringArg(payload));
 }
 
 }  // namespace ReferenceDeployment
