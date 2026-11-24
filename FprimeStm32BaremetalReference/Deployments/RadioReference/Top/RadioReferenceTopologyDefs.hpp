@@ -17,6 +17,7 @@
 #include "Svc/Subtopologies/ComCcsds/SubtopologyTopologyDefs.hpp"
 #include "Svc/Subtopologies/DataProducts/SubtopologyTopologyDefs.hpp"
 #include "Svc/Subtopologies/FileHandling/SubtopologyTopologyDefs.hpp"
+#include "fprime-sensors/Rfm9X/Subtopology/SubtopologyTopologyDefs.hpp"
 
 //ComCcsds Enum Includes
 #include "Svc/Subtopologies/ComCcsds/Ports_ComPacketQueueEnumAc.hpp"
@@ -48,6 +49,7 @@ namespace PingEntries {
     namespace Deployments_rateGroup_1Hz {enum { WARN = 3, FATAL = 5 };}
     namespace Deployments_rateGroup_0_5Hz {enum { WARN = 3, FATAL = 5 };}
     namespace Deployments_rateGroup_0_25Hz {enum { WARN = 3, FATAL = 5 };}
+    namespace Deployments_rateGroup_100Hz {enum { WARN = 3, FATAL = 5 };}
     namespace Deployments_cmdSeq {enum { WARN = 3, FATAL = 5 };}
 }  // namespace PingEntries
 
@@ -66,6 +68,7 @@ struct TopologyState {
     ComCcsds::SubtopologyState comCcsds;         //!< Subtopology state for ComCcsds
     DataProducts::SubtopologyState dataProducts; //!< Subtopology state for DataProducts
     FileHandling::SubtopologyState fileHandling; //!< Subtopology state for FileHandling
+    Rfm9X::SubtopologyState rfm9X;
 };
 
 namespace PingEntries = ::PingEntries;

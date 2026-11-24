@@ -44,6 +44,11 @@ module Deployments {
     stack size Default.STACK_SIZE \
     priority 41
 
+  instance rateGroup_100Hz: Svc.ActiveRateGroup base id 0x10006000 \
+    queue size Default.QUEUE_SIZE \
+    stack size Default.STACK_SIZE \
+    priority 44
+
   instance cmdSeq: Svc.CmdSequencer base id 0x10004000 \
     queue size Default.QUEUE_SIZE \
     stack size Default.STACK_SIZE \
@@ -67,5 +72,7 @@ module Deployments {
   instance timer: Stm32.STM32Timer base id 0x10013000
 
   instance comDriver: Stm32.Stm32UartDriver base id 0x10014000
+
+  instance radioFlight: Deployments.RadioFlight base id 0x10018000
 
 }

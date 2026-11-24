@@ -26,5 +26,6 @@ int main() {
         taskRunner.runAll();
         Deployments::timer.poll();
         Deployments::comDriver.poll();
+        Rfm9X::spiDriver.poll();
     }
 }

@@ -8,6 +8,7 @@ module Deployments {
     rateGroup_1Hz
     rateGroup_0_5Hz
     rateGroup_0_25Hz
+    rateGroup_100Hz
   }
 
   deployment topology RadioReference {
@@ -16,9 +17,10 @@ module Deployments {
   # Subtopology imports
   # ----------------------------------------------------------------------
     import CdhCore.Subtopology
-    import ComCcsds.Subtopology
+    import ComCcsds.FramingSubtopology
     import DataProducts.Subtopology
     import FileHandling.Subtopology
+    import Rfm9X.Subtopology
 
   # ----------------------------------------------------------------------
   # Instances used in the topology
@@ -27,11 +29,14 @@ module Deployments {
     instance rateGroup_1Hz
     instance rateGroup_0_5Hz
     instance rateGroup_0_25Hz
+    instance rateGroup_100Hz
     instance rateGroupDriver
     instance systemResources
     instance timer
     instance comDriver
     instance cmdSeq
+    instance ComCcsds.comStub
+    instance radioFlight
 
   # ----------------------------------------------------------------------
   # Pattern graph specifiers
@@ -41,7 +46,12 @@ module Deployments {
     event connections instance CdhCore.events
     telemetry connections instance CdhCore.tlmSend
     health connections instance CdhCore.$health
-    param connections instance FileHandling.prmDb
+    param connections instance FileHandling.prmDb {
+      ComCcsds.framer
+      ComCcsds.spacePacketDeframer
+      ComCcsds.spacePacketFramer
+      ComCcsds.tcDeframer
+    }
     time connections instance osTime
 
   # ----------------------------------------------------------------------
@@ -76,6 +86,14 @@ module Deployments {
     }
 
     connections Communications {
+      ComCcsds.framer.dataOut -> radioFlight.frameIn
+      radioFlight.frameReturn -> ComCcsds.framer.dataReturnIn
+      radioFlight.frameStatus -> ComCcsds.framer.comStatusIn
+      radioFlight.uartOut -> ComCcsds.comStub.dataIn
+      ComCcsds.comStub.dataReturnOut -> radioFlight.uartReturn
+      ComCcsds.comStub.comStatusOut -> radioFlight.uartStatus
+      ComCcsds.comStub.dataOut -> ComCcsds.frameAccumulator.dataIn
+      ComCcsds.frameAccumulator.dataReturnOut -> ComCcsds.comStub.dataReturnIn
       # ComDriver buffer allocations
       comDriver.allocate      -> ComCcsds.commsBufferManager.bufferGetCallee
       comDriver.deallocate    -> ComCcsds.commsBufferManager.bufferSendIn
@@ -120,6 +138,23 @@ module Deployments {
       rateGroup_0_25Hz.RateGroupMemberOut[2] -> DataProducts.dpBufferManager.schedIn
       rateGroup_0_25Hz.RateGroupMemberOut[3] -> DataProducts.dpWriter.schedIn
       rateGroup_0_25Hz.RateGroupMemberOut[4] -> DataProducts.dpMgr.schedIn
+
+      rateGroupDriver.CycleOut[Ports_RateGroups.rateGroup_100Hz] -> rateGroup_100Hz.CycleIn
+      rateGroup_100Hz.RateGroupMemberOut[0] -> Rfm9X.rfm9XManager.run
+      rateGroup_100Hz.RateGroupMemberOut[1] -> radioFlight.run
+    }
+
+    connections Radio {
+      Rfm9X.rfm9XManager.allocate -> ComCcsds.commsBufferManager.bufferGetCallee
+      Rfm9X.rfm9XManager.deallocate -> ComCcsds.commsBufferManager.bufferSendIn
+      radioFlight.radioOut -> Rfm9X.rfm9XManager.dataIn
+      Rfm9X.rfm9XManager.dataReturnOut -> radioFlight.radioReturn
+      Rfm9X.rfm9XManager.comStatusOut -> radioFlight.radioStatus
+      Rfm9X.rfm9XManager.dataOut -> radioFlight.radioReceive
+      radioFlight.radioReceiveReturn -> Rfm9X.rfm9XManager.dataReturnIn
+      Rfm9X.rfm9XManager.prmGet -> radioFlight.getParameter
+      Rfm9X.rfm9XManager.prmSet -> FileHandling.prmDb.setPrm
+      radioFlight.getStoredParameter -> FileHandling.prmDb.getPrm
     }
 
     connections CdhCore_cmdSeq {
