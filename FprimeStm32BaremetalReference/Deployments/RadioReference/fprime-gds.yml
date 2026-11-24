@@ -1,0 +1,23 @@
+# This is a configuration file for the F´ GDS application.
+
+# The command-line options specified here will be passed to the GDS when it is launched
+# from the current directory. Entries with no associated values are passed as `--flags`
+# and entries with associated values are passed as `--key <value>` pairs to the CLI
+#
+# Example:
+#
+# ```yaml
+# command-line-options:
+#   ip-client:
+#   ip-port: 50055
+# ```
+
+
+command-line-options:
+  # Cross-compiled dictionary
+  dictionary: build-artifacts/stm32h7/RadioReference/dict/RadioReferenceTopologyDictionary.json
+  # The board is already flashed and running; don't launch a binary
+  no-app:
+  communication-selection: uart
+  uart-device: /dev/ttyACM0
+  uart-baud: 115200

@@ -14,3 +14,10 @@
 
 
 command-line-options:
+  # Cross-compiled dictionary
+  dictionary: build-artifacts/stm32h7/ReferenceDeployment/dict/ReferenceDeploymentTopologyDictionary.json
+  # The board is already flashed and running; don't launch a binary
+  no-app:
+  communication-selection: uart
+  uart-device: /dev/ttyACM0
+  uart-baud: 115200
