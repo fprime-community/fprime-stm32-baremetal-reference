@@ -7,7 +7,8 @@ namespace {
 
 constexpr std::uint8_t MAGIC_0 = 0x52;
 constexpr std::uint8_t MAGIC_1 = 0x46;
-constexpr std::uint8_t VERSION = 1;
+constexpr std::uint8_t VERSION = 2;
+constexpr std::uint8_t ACK_KIND = 3;
 
 bool validKind(FrameKind kind) {
     return kind == FrameKind::TELEMETRY || kind == FrameKind::COMMAND;
@@ -22,9 +23,22 @@ std::uint16_t get16(const std::uint8_t* data) {
     return static_cast<std::uint16_t>((static_cast<std::uint16_t>(data[0]) << 8) | data[1]);
 }
 
+void put32(std::uint8_t* data, std::uint32_t value) {
+    data[0] = static_cast<std::uint8_t>(value >> 24);
+    data[1] = static_cast<std::uint8_t>(value >> 16);
+    data[2] = static_cast<std::uint8_t>(value >> 8);
+    data[3] = static_cast<std::uint8_t>(value);
+}
+
+std::uint32_t get32(const std::uint8_t* data) {
+    return (static_cast<std::uint32_t>(data[0]) << 24) | (static_cast<std::uint32_t>(data[1]) << 16) |
+           (static_cast<std::uint32_t>(data[2]) << 8) | data[3];
+}
+
 }  // namespace
 
 std::size_t encodeFragment(FrameKind kind,
+                           std::uint32_t session,
                            std::uint32_t id,
                            const std::uint8_t* frame,
                            std::size_t frameSize,
@@ -44,12 +58,10 @@ std::size_t encodeFragment(FrameKind kind,
     packet[1] = MAGIC_1;
     packet[2] = VERSION;
     packet[3] = static_cast<std::uint8_t>(kind);
-    packet[4] = static_cast<std::uint8_t>(id >> 24);
-    packet[5] = static_cast<std::uint8_t>(id >> 16);
-    packet[6] = static_cast<std::uint8_t>(id >> 8);
-    packet[7] = static_cast<std::uint8_t>(id);
-    put16(packet + 8, static_cast<std::uint16_t>(frameSize));
-    put16(packet + 10, static_cast<std::uint16_t>(offset));
+    put32(packet + 4, session);
+    put32(packet + 8, id);
+    put16(packet + 12, static_cast<std::uint16_t>(frameSize));
+    put16(packet + 14, static_cast<std::uint16_t>(offset));
     std::memcpy(packet + HEADER_SIZE, frame + offset, chunk);
     return HEADER_SIZE + chunk;
 }
@@ -60,17 +72,16 @@ bool decodeFragment(const std::uint8_t* packet, std::size_t size, Fragment& frag
         return false;
     }
     const FrameKind kind = static_cast<FrameKind>(packet[3]);
-    const std::uint16_t frameSize = get16(packet + 8);
-    const std::uint16_t offset = get16(packet + 10);
+    const std::uint16_t frameSize = get16(packet + 12);
+    const std::uint16_t offset = get16(packet + 14);
     const std::size_t chunk = size - HEADER_SIZE;
     if (!validKind(kind) || frameSize == 0 || frameSize > MAX_FRAME_SIZE ||
         offset >= frameSize || chunk > static_cast<std::size_t>(frameSize - offset)) {
         return false;
     }
     fragment.kind = kind;
-    fragment.id = (static_cast<std::uint32_t>(packet[4]) << 24) |
-                  (static_cast<std::uint32_t>(packet[5]) << 16) |
-                  (static_cast<std::uint32_t>(packet[6]) << 8) | packet[7];
+    fragment.session = get32(packet + 4);
+    fragment.id = get32(packet + 8);
     fragment.frameSize = frameSize;
     fragment.offset = offset;
     fragment.data = packet + HEADER_SIZE;
@@ -78,8 +89,33 @@ bool decodeFragment(const std::uint8_t* packet, std::size_t size, Fragment& frag
     return true;
 }
 
+std::size_t encodeAck(std::uint32_t session, std::uint32_t id, std::uint8_t* packet, std::size_t capacity) {
+    if (packet == nullptr || capacity < HEADER_SIZE) {
+        return 0;
+    }
+    packet[0] = MAGIC_0;
+    packet[1] = MAGIC_1;
+    packet[2] = VERSION;
+    packet[3] = ACK_KIND;
+    put32(packet + 4, session);
+    put32(packet + 8, id);
+    put16(packet + 12, 0);
+    put16(packet + 14, 0);
+    return HEADER_SIZE;
+}
+
+bool decodeAck(const std::uint8_t* packet, std::size_t size, Ack& ack) {
+    if (packet == nullptr || size != HEADER_SIZE || packet[0] != MAGIC_0 || packet[1] != MAGIC_1 ||
+        packet[2] != VERSION || packet[3] != ACK_KIND || get16(packet + 12) != 0 || get16(packet + 14) != 0) {
+        return false;
+    }
+    ack.session = get32(packet + 4);
+    ack.id = get32(packet + 8);
+    return true;
+}
+
 Reassembler::Reassembler()
-    : m_frame{}, m_id(0), m_expected(0), m_received(0), m_kind(FrameKind::TELEMETRY), m_active(false) {}
+    : m_frame{}, m_session(0), m_id(0), m_expected(0), m_received(0), m_kind(FrameKind::TELEMETRY), m_active(false) {}
 
 void Reassembler::reset() {
     m_active = false;
@@ -94,13 +130,15 @@ ReceiveResult Reassembler::accept(const std::uint8_t* packet, std::size_t size) 
         return ReceiveResult::REJECTED;
     }
     if (fragment.offset == 0) {
+        m_session = fragment.session;
         m_id = fragment.id;
         m_kind = fragment.kind;
         m_expected = fragment.frameSize;
         m_received = 0;
         m_active = true;
     }
-    if (!m_active || fragment.id != m_id || fragment.kind != m_kind || fragment.frameSize != m_expected ||
+    if (!m_active || fragment.session != m_session || fragment.id != m_id ||
+        fragment.kind != m_kind || fragment.frameSize != m_expected ||
         fragment.offset != m_received) {
         reset();
         return ReceiveResult::REJECTED;

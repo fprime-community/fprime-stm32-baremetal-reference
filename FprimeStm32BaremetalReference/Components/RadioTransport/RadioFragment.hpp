@@ -8,13 +8,14 @@ namespace RadioTransport {
 
 constexpr std::size_t MAX_FRAME_SIZE = 1024;
 constexpr std::size_t MAX_PACKET_SIZE = 255;
-constexpr std::size_t HEADER_SIZE = 12;
+constexpr std::size_t HEADER_SIZE = 16;
 constexpr std::size_t MAX_FRAGMENT_SIZE = MAX_PACKET_SIZE - HEADER_SIZE;
 
 enum class FrameKind : std::uint8_t { TELEMETRY = 1, COMMAND = 2 };
 
 struct Fragment {
     FrameKind kind;
+    std::uint32_t session;
     std::uint32_t id;
     std::uint16_t frameSize;
     std::uint16_t offset;
@@ -24,6 +25,7 @@ struct Fragment {
 
 // Encodes one nonempty fragment; zero indicates an invalid argument.
 std::size_t encodeFragment(FrameKind kind,
+                           std::uint32_t session,
                            std::uint32_t id,
                            const std::uint8_t* frame,
                            std::size_t frameSize,
@@ -32,6 +34,14 @@ std::size_t encodeFragment(FrameKind kind,
                            std::size_t capacity);
 
 bool decodeFragment(const std::uint8_t* packet, std::size_t size, Fragment& fragment);
+
+struct Ack {
+    std::uint32_t session;
+    std::uint32_t id;
+};
+
+std::size_t encodeAck(std::uint32_t session, std::uint32_t id, std::uint8_t* packet, std::size_t capacity);
+bool decodeAck(const std::uint8_t* packet, std::size_t size, Ack& ack);
 
 enum class ReceiveResult { REJECTED, INCOMPLETE, COMPLETE };
 
@@ -45,10 +55,12 @@ class Reassembler {
     const std::uint8_t* data() const { return m_frame; }
     std::size_t size() const { return m_received; }
     std::uint32_t id() const { return m_id; }
+    std::uint32_t session() const { return m_session; }
     FrameKind kind() const { return m_kind; }
 
   private:
     std::uint8_t m_frame[MAX_FRAME_SIZE];
+    std::uint32_t m_session;
     std::uint32_t m_id;
     std::size_t m_expected;
     std::size_t m_received;
