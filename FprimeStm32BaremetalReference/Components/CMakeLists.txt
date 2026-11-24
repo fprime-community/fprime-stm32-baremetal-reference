@@ -4,3 +4,4 @@
 add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/Led/")
 add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/RadioTest/")
 add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/RadioTransport/")
+add_fprime_subdirectory("${CMAKE_CURRENT_LIST_DIR}/RadioFlight/")
