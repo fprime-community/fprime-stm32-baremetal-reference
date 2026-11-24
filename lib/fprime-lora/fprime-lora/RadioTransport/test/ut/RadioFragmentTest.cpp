@@ -1,4 +1,4 @@
-#include "FprimeStm32BaremetalReference/Components/RadioTransport/RadioFragment.hpp"
+#include "fprime-lora/RadioTransport/RadioFragment.hpp"
 #include <gtest/gtest.h>
 #include <cstring>
 

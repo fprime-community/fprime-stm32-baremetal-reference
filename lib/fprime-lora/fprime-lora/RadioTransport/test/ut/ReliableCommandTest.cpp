@@ -1,4 +1,4 @@
-#include "FprimeStm32BaremetalReference/Components/RadioTransport/ReliableCommand.hpp"
+#include "fprime-lora/RadioTransport/ReliableCommand.hpp"
 #include <gtest/gtest.h>
 #include <cstring>
 

@@ -1,4 +1,4 @@
-#include "FprimeStm32BaremetalReference/Components/RadioTransport/TelemetryQueue.hpp"
+#include "fprime-lora/RadioTransport/TelemetryQueue.hpp"
 #include <gtest/gtest.h>
 #include <cstring>
 

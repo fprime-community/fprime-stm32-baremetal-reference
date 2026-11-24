@@ -1,4 +1,4 @@
-#include "FprimeStm32BaremetalReference/Components/RadioTransport/TcStream.hpp"
+#include "fprime-lora/RadioTransport/TcStream.hpp"
 #include <gtest/gtest.h>
 #include <cstring>
 

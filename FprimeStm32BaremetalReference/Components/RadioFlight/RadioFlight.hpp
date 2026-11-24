@@ -2,7 +2,7 @@
 #define DEPLOYMENTS_RADIO_FLIGHT_HPP
 
 #include "FprimeStm32BaremetalReference/Components/RadioFlight/RadioFlightComponentAc.hpp"
-#include "FprimeStm32BaremetalReference/Components/RadioTransport/TelemetryQueue.hpp"
+#include "fprime-lora/RadioTransport/TelemetryQueue.hpp"
 
 namespace Deployments {
 

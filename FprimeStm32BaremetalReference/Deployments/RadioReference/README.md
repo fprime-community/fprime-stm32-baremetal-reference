@@ -19,7 +19,7 @@ after a board reset are not integrated. The transport classes have a
 fail-closed session API, but the deployments do not yet expose or enforce it.
 Do not use these deployments as an operational radio link. The existing
 `ReferenceDeployment` remains the radio echo test.
-The experimental [transport foundation](../../Components/RadioTransport/README.md)
+The experimental [transport foundation](../../../lib/fprime-lora/fprime-lora/RadioTransport/README.md)
 has native tests, but is not yet a complete command or telemetry bridge.
 
 Build from the project root using the configured STM32 build directory:

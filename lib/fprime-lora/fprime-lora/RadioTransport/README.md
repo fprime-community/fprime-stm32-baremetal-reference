@@ -54,6 +54,5 @@ Acknowledgement means the chosen local acceptance boundary was reached, not
 that a command executed. Volatile duplicate suppression cannot guarantee
 exactly-once execution across resets.
 
-The SAMD project has a deployment-local copy of these portable sources under
-`RadioGateway/RadioTransport`. Changes to the protocol must be kept in sync
-between the two projects until a shared distribution mechanism is chosen.
+Both reference projects use this shared library. Ensure both deployments use
+the same protocol version when updating or distributing the library.

@@ -3,7 +3,7 @@
 
 #include "FprimeStm32BaremetalReference/Components/RadioFlight/RadioFlight.hpp"
 #include "FprimeStm32BaremetalReference/Components/RadioFlight/RadioFlightGTestBase.hpp"
-#include "FprimeStm32BaremetalReference/Components/RadioTransport/RadioFragment.hpp"
+#include "fprime-lora/RadioTransport/RadioFragment.hpp"
 
 #include <cstring>
 #include <vector>

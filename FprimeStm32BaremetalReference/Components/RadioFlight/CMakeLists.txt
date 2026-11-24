@@ -4,7 +4,7 @@ register_fprime_library(
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/RadioFlight.cpp"
     DEPENDS
-        FprimeStm32BaremetalReference_Components_RadioTransport
+        fprime-lora_RadioTransport
 )
 
 register_fprime_ut(
@@ -13,6 +13,6 @@ register_fprime_ut(
     SOURCES
         "${CMAKE_CURRENT_LIST_DIR}/test/ut/RadioFlightTest.cpp"
     DEPENDS
-        FprimeStm32BaremetalReference_Components_RadioTransport
+        fprime-lora_RadioTransport
     UT_AUTO_HELPERS
 )
