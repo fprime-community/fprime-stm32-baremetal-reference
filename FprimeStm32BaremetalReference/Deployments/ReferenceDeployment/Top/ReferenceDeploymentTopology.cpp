@@ -118,7 +118,7 @@ void configureTopology() {
     }
 
     // FREQUENCY_HZ is parameter id 3 in the pinned Rfm9XManager.
-    radioTest.configure(Rfm9X::rfm9XManager.getIdBase() + 3);
+    radioTest.configure(Rfm9X::rfm9XManager.getIdBase() + 3, 915000000U);
     Rfm9X::rfm9XManager.configure(10);
 }
 

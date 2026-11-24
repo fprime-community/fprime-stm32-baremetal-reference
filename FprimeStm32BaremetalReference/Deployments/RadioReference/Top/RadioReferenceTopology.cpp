@@ -42,7 +42,7 @@ void configureTopology() {
     if (resetStatus == Fw::Success::FAILURE) {
         Fw::Logger::log("[ERROR] Failed to open RFM9X reset GPIO\n");
     }
-    radioFlight.configure(Rfm9X::rfm9XManager.getIdBase() + 3);
+    radioFlight.configure(Rfm9X::rfm9XManager.getIdBase() + 3, 915000000U, 100);
     Rfm9X::rfm9XManager.configure(10);
 }
 

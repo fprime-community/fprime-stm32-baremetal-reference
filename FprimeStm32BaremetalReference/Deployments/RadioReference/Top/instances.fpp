@@ -73,6 +73,6 @@ module Deployments {
 
   instance comDriver: Stm32.Stm32UartDriver base id 0x10014000
 
-  instance radioFlight: Deployments.RadioFlight base id 0x10018000
+  instance radioFlight: Lora.RadioFlight base id 0x10018000
 
 }

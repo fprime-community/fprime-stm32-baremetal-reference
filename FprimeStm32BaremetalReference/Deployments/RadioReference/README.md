@@ -9,7 +9,9 @@ The experimental flight downlink is wired: a copy of each CCSDS telemetry
 frame is queued for fragmentation and radio transmission independently of
 the USART1 path. This has not been tested on hardware. Radio congestion
 drops frames from a two-frame queue; counters are available in the
-`radioFlight` telemetry channels.
+`radioFlight` telemetry channels. The component comes from `fprime-lora`;
+this deployment configures its frequency fallback to 915 MHz and its
+telemetry reporting period to 100 scheduler ticks.
 
 **The gateway is not complete.** An experimental SAMD `RadioGateway`
 deployment can reassemble telemetry and forward it over UART, but has not

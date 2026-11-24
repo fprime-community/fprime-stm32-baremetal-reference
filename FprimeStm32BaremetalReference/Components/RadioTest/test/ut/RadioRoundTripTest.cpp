@@ -12,7 +12,7 @@ class RadioRoundTripTester final : public Rfm9X::Rfm9XManagerGTestBase {
     RadioRoundTripTester()
         : Rfm9XManagerGTestBase("RadioRoundTripTester", 2048),
           radio("radio"),
-          support(),
+          support(915000000U),
           model(),
           pending(false),
           allocated(false),
@@ -127,7 +127,7 @@ class RadioRoundTripTester final : public Rfm9X::Rfm9XManagerGTestBase {
     }
 
     Rfm9X::Rfm9XManager radio;
-    ReferenceDeployment::RadioTestTester support;
+    Lora::RadioTestTester support;
     Rfm9X::Rfm9XSimModel model;
     bool pending;
     bool allocated;
