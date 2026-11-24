@@ -52,6 +52,8 @@ class Reassembler {
     Reassembler();
     ReceiveResult accept(const std::uint8_t* packet, std::size_t size);
     void reset();
+    // The caller must not accept another fragment while this buffer is borrowed.
+    std::uint8_t* data() { return m_frame; }
     const std::uint8_t* data() const { return m_frame; }
     std::size_t size() const { return m_received; }
     std::uint32_t id() const { return m_id; }

@@ -14,10 +14,12 @@ Version 2 is not compatible with the earlier 12-byte experimental format.
 
 `TelemetryQueue` copies at most two frames and counts rejected frames; it is
 intended to keep radio congestion independent of the UART path.
-`TcStream` extracts complete CCSDS TC frames from arbitrary UART byte chunks
-and checks the spacecraft ID, length and FECF. The caller must retain any
-bytes not consumed while a complete frame awaits release, and must reset an
-abandoned partial frame on a suitable UART inter-frame timeout.
+`TcStream` is an experimental, currently unconnected parser for CCSDS TC
+frames. Before integrating it, compare using F Prime's `Svc.FrameAccumulator`
+and `CcsdsTcFrameDetector` instead. The framework detector uses its own
+build's `ComCfg.SpacecraftId`, which must match the STM32 dictionary. Measure
+the complete RAM and flash cost, including the accumulator's backing store and
+allocated output buffers, and verify overload and return-buffer handling.
 `CommandSender` and `CommandReceiver` start disarmed. An operator must first
 reconcile any command with an uncertain outcome and explicitly arm both with
 the same fresh nonzero session. The operator must maintain a durable record
