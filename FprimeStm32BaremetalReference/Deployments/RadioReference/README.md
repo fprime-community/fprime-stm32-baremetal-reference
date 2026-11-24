@@ -5,8 +5,18 @@ currently provides the core F Prime CCSDS command and telemetry stack over
 USART1 at 115200 baud. It uses the project's TIM2 clock, cooperative task
 runner, bootstrap allocator, and RAM-backed MicroFs.
 
-The radio gateway is **not wired yet**. This deployment does not currently
-transmit telemetry over LoRa or receive commands over RF; the existing
+The experimental flight downlink is wired: a copy of each CCSDS telemetry
+frame is queued for fragmentation and radio transmission independently of
+the USART1 path. This has not been tested on hardware. Radio congestion
+drops frames from a two-frame queue; counters are available in the
+`radioFlight` telemetry channels.
+
+**The gateway is not complete.** An experimental SAMD `RadioGateway`
+deployment can reassemble telemetry and forward it over UART, but has not
+been tested on hardware. Commands in either direction of the RF link are
+currently counted and discarded. Command acknowledgements, retry arbitration,
+and operator-controlled recovery after a board reset are not integrated.
+Do not use these deployments as an operational radio link. The existing
 `ReferenceDeployment` remains the radio echo test.
 The experimental [transport foundation](../../Components/RadioTransport/README.md)
 has native tests, but is not yet a complete command or telemetry bridge.

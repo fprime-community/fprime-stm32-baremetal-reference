@@ -1,7 +1,8 @@
 # RadioTransport foundation
 
-This library is a work in progress, not an operational radio gateway. Neither
-deployment is wired to it yet.
+This library is a work in progress, not an operational radio gateway. The
+STM32 flight deployment uses its telemetry queue and fragment encoder; the
+SAMD gateway and command uplink are not wired yet.
 
 Version 2 of the experimental wire format has a 16-byte header: magic `RF`,
 version, kind, 32-bit session, 32-bit frame ID, 16-bit frame size, and 16-bit
@@ -12,6 +13,10 @@ Version 2 is not compatible with the earlier 12-byte experimental format.
 
 `TelemetryQueue` copies at most two frames and counts rejected frames; it is
 intended to keep radio congestion independent of the UART path.
+`TcStream` extracts complete CCSDS TC frames from arbitrary UART byte chunks
+and checks the spacecraft ID, length and FECF. The caller must retain any
+bytes not consumed while a complete frame awaits release, and must reset an
+abandoned partial frame on a suitable UART inter-frame timeout.
 `CommandSender` sends one command at a time, retries a complete frame after
 a failed radio send or an acknowledgement timeout, and stops after the
 configured number of attempts. Call `packetResult` only after the radio has
@@ -30,3 +35,7 @@ sessions, and a reset between local delivery and recording the delivery may
 cause an uncertain outcome or duplicate command. Session generation and
 restart policy are not implemented yet; exactly-once execution across resets
 is not guaranteed.
+
+The SAMD project has a deployment-local copy of these portable sources under
+`RadioGateway/RadioTransport`. Changes to the protocol must be kept in sync
+between the two projects until a shared distribution mechanism is chosen.
