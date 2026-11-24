@@ -1,8 +1,9 @@
 # RadioTransport foundation
 
 This library is a work in progress, not an operational radio gateway. The
-STM32 flight deployment uses its telemetry queue and fragment encoder; the
-SAMD gateway and command uplink are not wired yet.
+STM32 flight deployment uses its telemetry queue and fragment encoder. The
+SAMD gateway has an experimental telemetry-only path; command uplink is not
+wired in either deployment.
 
 Version 2 of the experimental wire format has a 16-byte header: magic `RF`,
 version, kind, 32-bit session, 32-bit frame ID, 16-bit frame size, and 16-bit
@@ -17,24 +18,39 @@ intended to keep radio congestion independent of the UART path.
 and checks the spacecraft ID, length and FECF. The caller must retain any
 bytes not consumed while a complete frame awaits release, and must reset an
 abandoned partial frame on a suitable UART inter-frame timeout.
-`CommandSender` sends one command at a time, retries a complete frame after
-a failed radio send or an acknowledgement timeout, and stops after the
-configured number of attempts. Call `packetResult` only after the radio has
-returned the packet and reported its transmit result. `CommandReceiver`
-acknowledges only after its caller confirms acceptance by the local uplink,
-and re-acknowledges duplicates rather than delivering them again.
+`CommandSender` and `CommandReceiver` start disarmed. An operator must first
+reconcile any command with an uncertain outcome and explicitly arm both with
+the same fresh nonzero session. The operator must maintain a durable record
+outside these volatile classes and assign a strictly increasing session value
+that has never been used before, even after either board restarts. Session
+values must not wrap; when exhausted, this protocol needs replacement.
+Each side rejects reuse of a session during its current boot, but cannot
+verify that a session was not used before a reset. A rebooted receiver remains
+disarmed and rejects commands until explicitly armed; a rebooted sender
+remains disarmed and cannot initiate commands.
 
-The deployment must serialize access to these classes, generate a session ID
-that does not repeat for a new sender session, allocate unique command IDs
-within that session, and arrange scheduling and bounded queues. The sender
-must wait for a packet's return before reusing its buffer. The receiver must
-retain a pending acknowledgement until its radio send succeeds. Radio
-transmit completion is not command execution confirmation. This protocol
-does not provide durable duplicate suppression: resets, session reuse, stale
-sessions, and a reset between local delivery and recording the delivery may
-cause an uncertain outcome or duplicate command. Session generation and
-restart policy are not implemented yet; exactly-once execution across resets
-is not guaranteed.
+The sender accepts strictly increasing command IDs within a session without
+wrapping. It sends one command at a time, retries the complete frame after a
+failed radio send or an acknowledgement timeout, and disarms when its attempt
+limit is exhausted. An exhausted command has an **uncertain** outcome; do not
+automatically re-arm or resend it. A new session requires operator recovery.
+Call `packetResult` only after the radio has returned the packet and reported
+its transmit result. Disarming the sender is rejected while a packet is owned
+by the radio; disarming a sending or waiting command records `FAILED`, since
+the command's outcome may be uncertain.
+The receiver rejects packets outside its armed session, re-acknowledges
+duplicates, and only acknowledges after its caller confirms local acceptance.
+The caller must call `finish(false)` only when it knows no delivery occurred.
+
+Deployment integration must serialize calls, provide a trustworthy manual
+arming mechanism on both boards, stop the sender when a peer reset is detected,
+retain pending radio buffers, and arrange scheduling and bounded queues. The
+receiver must retain a pending acknowledgement until its radio send succeeds.
+These classes alone cannot detect a peer reset or enforce the operator's
+session record. The deployment must not silently re-arm after a reset.
+Acknowledgement means the chosen local acceptance boundary was reached, not
+that a command executed. Volatile duplicate suppression cannot guarantee
+exactly-once execution across resets.
 
 The SAMD project has a deployment-local copy of these portable sources under
 `RadioGateway/RadioTransport`. Changes to the protocol must be kept in sync

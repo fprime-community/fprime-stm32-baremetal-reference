@@ -14,8 +14,9 @@ drops frames from a two-frame queue; counters are available in the
 **The gateway is not complete.** An experimental SAMD `RadioGateway`
 deployment can reassemble telemetry and forward it over UART, but has not
 been tested on hardware. Commands in either direction of the RF link are
-currently counted and discarded. Command acknowledgements, retry arbitration,
-and operator-controlled recovery after a board reset are not integrated.
+currently counted and discarded. Command acknowledgements, retry arbitration, and operator-controlled recovery
+after a board reset are not integrated. The transport classes have a
+fail-closed session API, but the deployments do not yet expose or enforce it.
 Do not use these deployments as an operational radio link. The existing
 `ReferenceDeployment` remains the radio echo test.
 The experimental [transport foundation](../../Components/RadioTransport/README.md)

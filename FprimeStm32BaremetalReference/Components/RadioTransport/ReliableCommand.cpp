@@ -6,11 +6,36 @@ namespace RadioTransport {
 
 CommandSender::CommandSender()
     : m_frame{}, m_size(0), m_offset(0), m_pendingSize(0), m_session(0), m_id(0), m_timeout(0),
-      m_startedWaiting(0), m_maxAttempts(0), m_attempts(0), m_state(CommandSendState::IDLE) {}
+      m_startedWaiting(0), m_maxAttempts(0), m_attempts(0), m_lastSession(0), m_lastId(0),
+      m_state(CommandSendState::IDLE), m_armed(false), m_hasId(false) {}
+
+bool CommandSender::arm(std::uint32_t session) {
+    if (m_armed || m_pendingSize != 0 || session <= m_lastSession) {
+        return false;
+    }
+    m_lastSession = session;
+    m_session = session;
+    m_hasId = false;
+    m_state = CommandSendState::IDLE;
+    m_armed = true;
+    return true;
+}
+
+bool CommandSender::disarm() {
+    if (m_pendingSize != 0) {
+        return false;
+    }
+    m_armed = false;
+    if (m_state == CommandSendState::SENDING || m_state == CommandSendState::WAIT_ACK) {
+        m_state = CommandSendState::FAILED;
+    }
+    return true;
+}
 
 bool CommandSender::start(std::uint32_t session, std::uint32_t id, const std::uint8_t* frame, std::size_t size,
                           std::uint32_t timeoutTicks, std::uint32_t maxAttempts) {
-    if (m_state == CommandSendState::SENDING || m_state == CommandSendState::WAIT_ACK || m_pendingSize != 0 ||
+    if (!m_armed || session != m_session || (m_hasId && id <= m_lastId) ||
+        m_state == CommandSendState::SENDING || m_state == CommandSendState::WAIT_ACK || m_pendingSize != 0 ||
         frame == nullptr || size == 0 || size > MAX_FRAME_SIZE || timeoutTicks == 0 ||
         timeoutTicks >= 0x80000000U || maxAttempts == 0) {
         return false;
@@ -20,6 +45,8 @@ bool CommandSender::start(std::uint32_t session, std::uint32_t id, const std::ui
     m_offset = 0;
     m_session = session;
     m_id = id;
+    m_lastId = id;
+    m_hasId = true;
     m_timeout = timeoutTicks;
     m_maxAttempts = maxAttempts;
     m_attempts = 1;
@@ -82,6 +109,7 @@ void CommandSender::tick(std::uint32_t now) {
 void CommandSender::retry() {
     if (m_attempts >= m_maxAttempts) {
         m_state = CommandSendState::FAILED;
+        m_armed = false;
     } else {
         ++m_attempts;
         m_offset = 0;
@@ -90,19 +118,46 @@ void CommandSender::retry() {
 }
 
 CommandReceiver::CommandReceiver()
-    : m_delivered{}, m_pending{}, m_hasDelivered(false), m_hasPending(false), m_ackPending(false) {}
+    : m_delivered{}, m_pending{}, m_session(0), m_lastSession(0), m_hasDelivered(false), m_hasPending(false),
+      m_ackPending(false), m_armed(false) {}
+
+bool CommandReceiver::arm(std::uint32_t session) {
+    if (m_armed || m_hasPending || session <= m_lastSession) {
+        return false;
+    }
+    m_session = session;
+    m_lastSession = session;
+    m_hasDelivered = false;
+    m_ackPending = false;
+    m_armed = true;
+    return true;
+}
+
+bool CommandReceiver::disarm() {
+    if (m_hasPending) {
+        return false;
+    }
+    m_armed = false;
+    m_ackPending = false;
+    return true;
+}
 
 CommandReceiveResult CommandReceiver::begin(std::uint32_t session, std::uint32_t id) {
+    if (!m_armed) {
+        return CommandReceiveResult::DISARMED;
+    }
+    if (session != m_session) {
+        return CommandReceiveResult::WRONG_SESSION;
+    }
     if (m_hasPending) {
         return CommandReceiveResult::BUSY;
     }
     if (m_hasDelivered && session == m_delivered.session) {
-        const std::uint32_t delta = id - m_delivered.id;
-        if (delta == 0) {
+        if (id == m_delivered.id) {
             m_ackPending = true;
             return CommandReceiveResult::DUPLICATE;
         }
-        if (delta >= 0x80000000U) {
+        if (id < m_delivered.id) {
             return CommandReceiveResult::STALE;
         }
     }
