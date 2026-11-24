@@ -13,6 +13,6 @@
 [submodule "lib/fprime-yamcs"]
 	path = lib/fprime-yamcs
 	url = https://github.com/fprime-community/fprime-yamcs
-[submodule "fprime-lora"]
-	path = fprime-lora
+[submodule "lib/fprime-lora"]
+	path = lib/fprime-lora
 	url = https://github.com/Iva-L/fprime-lora
